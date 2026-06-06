@@ -27,7 +27,11 @@ const App = {
         e.preventDefault();
         const pg = el.dataset.page;
         const lv = el.dataset.level;
-        this.navigate(pg, lv ? { level: lv } : {});
+        const bk = el.dataset.book;
+        const opts = {};
+        if (lv) opts.level = lv;
+        if (bk) opts.book = bk;
+        this.navigate(pg, opts);
       });
     });
   },
@@ -74,7 +78,8 @@ const App = {
     document.querySelectorAll('.nav-link').forEach(el => {
       el.classList.remove('active');
       const match = el.dataset.page === page &&
-        (!opts.level || el.dataset.level === opts.level);
+        (!opts.level || el.dataset.level === opts.level) &&
+        (!opts.book || el.dataset.book === opts.book);
       if (match) el.classList.add('active');
     });
     this._render(page, opts);
@@ -88,6 +93,7 @@ const App = {
       case 'level':      this._renderLevel(wrap, opts.level || this.level); break;
       case 'vocabulary': this._renderVocabulary(wrap); break;
       case 'books':      this._renderBooks(wrap); break;
+      case 'book':       this._renderBook(wrap, opts.book || 'netzwerk-b1'); break;
     }
     wrap.scrollTop = 0;
   },
@@ -149,11 +155,23 @@ const App = {
         }).join('')}
       </div>
 
-      <div class="section-title">⚡ Schnellstart</div>
+      <div class="section-title">📗 Meine Bücher</div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap">
+        <div class="book-quick-card" onclick="App.navigate('book',{book:'netzwerk-b1'})" style="cursor:pointer;background:linear-gradient(135deg,#8b5cf222,#8b5cf244);border:1px solid #8b5cf255;border-radius:16px;padding:20px 24px;display:flex;align-items:center;gap:16px;min-width:280px">
+          <span style="font-size:3rem">📗</span>
+          <div>
+            <div style="font-weight:700;font-size:1rem">Netzwerk B1 Neu</div>
+            <div style="font-size:.8rem;color:var(--text3)">10 Kapitel · Stefanie Dengler u.a.</div>
+            <div style="font-size:.75rem;margin-top:4px;color:#8b5cf6">→ Jetzt lernen</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-title" style="margin-top:28px">⚡ Schnellstart</div>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
         <button class="btn btn-primary" onclick="App.navigate('level',{level:'B1'})">📖 B1 Lerneinheiten öffnen</button>
         <button class="btn btn-secondary" onclick="App.navigate('vocabulary')">🃏 Vokabeln üben</button>
-        <button class="btn btn-secondary" onclick="App.navigate('books')">📚 Bücher ansehen</button>
+        <button class="btn btn-secondary" onclick="App.navigate('book',{book:'netzwerk-b1'})">📗 Netzwerk B1 Neu</button>
       </div>
     `;
 
@@ -283,7 +301,7 @@ const App = {
       <div class="modal-subtitle">${skillIcons[skill]} ${skillData.title}</div>
 
       <div class="ex-progress-steps" style="display:flex;gap:4px;margin-bottom:20px">
-        ${exercises.map((_,i) => `<div class="ex-step${done.includes(i)?' done':i===idx?' current':''}></div>`).join('')}
+        ${exercises.map((_,i) => `<div class="ex-step${done.includes(i)?' done':i===idx?' current':''}"></div>`).join('')}
       </div>
 
       <div id="ex-container">
@@ -505,9 +523,9 @@ const App = {
     const qHTML = ex.questions.map((q, qi) => `
       <div style="margin-bottom:14px">
         <div style="font-weight:600;margin-bottom:8px;font-size:.9rem">${qi+1}. ${q.q}</div>
-        <div class="choices" id="ls_mc_${id}_${qi}">
+        <div class="choices" id="rd_mc_${id}_${qi}">
           ${q.choices.map((c,ci) => `
-            <button class="choice-btn" onclick="App._checkMCInline(this,'ls_mc_${id}_${qi}',${ci},${q.correct})">
+            <button class="choice-btn" onclick="App._checkMCInline(this,'rd_mc_${id}_${qi}',${ci},${q.correct})">
               ${String.fromCharCode(65+ci)}. ${c}
             </button>`).join('')}
         </div>
@@ -526,8 +544,8 @@ const App = {
         </div>
         <div style="font-weight:700;margin-bottom:12px;font-size:.9rem">Fragen zum Text:</div>
         ${qHTML}
-        <div id="fb_ls_${id}" style="margin-top:10px"></div>
-        <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="App._checkReading('${id.replace('ls_','rd_')}',${ex.questions.length},'${unitId}','${skill}',${idx})">
+        <div id="fb_rd_${id}" style="margin-top:10px"></div>
+        <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="App._checkReading('${id}',${ex.questions.length},'${unitId}','${skill}',${idx})">
           Prüfen ✓
         </button>
       </div>`;
@@ -635,23 +653,6 @@ const App = {
   ====================================================== */
   _renderVocabulary(wrap) {
     document.getElementById('breadcrumb').textContent = 'Vokabeln';
-    let filter = 'all', query = '';
-
-    const render = () => {
-      let items = query ? Vocab.search(query) : Vocab.filterByLevel(filter === 'all' ? null : filter);
-      const learned = Vocab.getLearnedCount();
-      const wrap2 = document.getElementById('vocab-cards');
-      if (!wrap2) return;
-      if (!items.length) {
-        wrap2.innerHTML = `<div class="vocab-empty-state">
-          <div class="empty-icon">📭</div>
-          <h3>${query ? 'Keine Ergebnisse' : 'Noch keine Vokabeln'}</h3>
-          <p>${query ? 'Andere Suche versuchen.' : 'Füge deine ersten Vokabeln oben hinzu!'}</p>
-        </div>`;
-        return;
-      }
-      wrap2.innerHTML = items.map(v => this._buildFlipCard(v)).join('');
-    };
 
     wrap.innerHTML = `
       <div class="vocab-page">
@@ -818,32 +819,26 @@ const App = {
   ====================================================== */
   _renderBooks(wrap) {
     document.getElementById('breadcrumb').textContent = 'Bücher';
-    const books = [
-      { id:'b1', title:'Netzwerk B1', author:'Stefanie Dengler u.a.', level:'B1', color:'#8b5cf6', icon:'📗', desc:'Das Kursbuch für B1-Lernende. Ideal zur Prüfungsvorbereitung.' },
-      { id:'b2', title:'Menschen A1', author:'Franz Specht u.a.', level:'A1', color:'#10b981', icon:'📘', desc:'Modernes Lehrwerk für Einsteiger mit viel Sprachpraxis.' },
-      { id:'b3', title:'Schritte plus Neu B1', author:'Silke Hilpert u.a.', level:'B1', color:'#7c3aed', icon:'📙', desc:'Intensivtraining für die B1-Prüfung mit Hör- und Lesetexten.' },
-      { id:'b4', title:'Deutsch üben – Lesen & Schreiben A2', author:'Anneli Billina', level:'A2', color:'#06b6d4', icon:'📕', desc:'Gezielte Übungen für Lesen und Schreiben auf A2-Niveau.' },
-    ];
-    const levelColors = {A1:'#10b981',A2:'#06b6d4',B1:'#8b5cf6',B2:'#f59e0b',C1:'#ef4444'};
-
     wrap.innerHTML = `
       <div class="books-header">
         <h1>📚 Meine Bücher</h1>
-        <p>Lerneinheiten basierend auf deinen Lehrbüchern. Lade deine Bücher hoch, um weitere Inhalte freizuschalten.</p>
+        <p>Lerneinheiten basierend auf deinen Lehrbüchern.</p>
       </div>
       <div class="books-grid">
-        ${books.map(b => `
-          <div class="book-card" onclick="App.toast('Buchinhalt für &quot;${b.title}&quot; wird bald verfügbar!','info')">
-            <div class="book-cover" style="background:linear-gradient(135deg,${b.color}22,${b.color}44)">
-              <span style="font-size:4.5rem">${b.icon}</span>
+        <div class="book-card" onclick="App.navigate('book',{book:'netzwerk-b1'})" style="cursor:pointer">
+          <div class="book-cover" style="background:linear-gradient(135deg,#8b5cf222,#8b5cf244)">
+            <span style="font-size:4.5rem">📗</span>
+          </div>
+          <div class="book-info">
+            <div class="book-level-pill" style="background:#8b5cf6">B1</div>
+            <div class="book-title">Netzwerk B1 Neu</div>
+            <div class="book-author">Stefanie Dengler u.a. · Klett-Langenscheidt</div>
+            <div class="book-desc">10 Kapitel · Prüfungsvorbereitung · Alle 4 Fertigkeiten</div>
+            <div style="margin-top:10px">
+              <span class="btn btn-primary btn-sm">→ Jetzt lernen</span>
             </div>
-            <div class="book-info">
-              <div class="book-level-pill" style="background:${levelColors[b.level]||'#888'}">${b.level}</div>
-              <div class="book-title">${b.title}</div>
-              <div class="book-author">${b.author}</div>
-              <div class="book-desc">${b.desc}</div>
-            </div>
-          </div>`).join('')}
+          </div>
+        </div>
         <div class="book-placeholder" onclick="App.toast('Buchupload kommt bald!','info')">
           <div class="book-placeholder-icon">➕</div>
           <div class="book-placeholder-text">Neues Buch hinzufügen</div>
@@ -851,6 +846,144 @@ const App = {
         </div>
       </div>
     `;
+  },
+
+  /* ======================================================
+     BOOK PAGE – Netzwerk B1 Neu
+  ====================================================== */
+  _renderBook(wrap, bookId) {
+    const book = bookId === 'netzwerk-b1' ? BOOK_NETZWERK_B1 : null;
+    if (!book) { wrap.innerHTML = '<p>Buch nicht gefunden.</p>'; return; }
+    document.getElementById('breadcrumb').textContent = book.title;
+
+    wrap.innerHTML = `
+      <div class="level-hero" style="--lc:${book.color}">
+        <div class="level-hero-badge" style="font-size:2rem">${book.icon}</div>
+        <div>
+          <div class="level-hero-title">${book.title}</div>
+          <div class="level-hero-desc">${book.author} · ${book.publisher}</div>
+          <div class="level-hero-desc" style="margin-top:4px">${book.desc}</div>
+        </div>
+      </div>
+
+      <div class="section-title">📖 Kapitelübersicht</div>
+      <div class="units-grid">
+        ${book.chapters.map(ch => `
+          <div class="unit-card" onclick="App._openBookChapter('${ch.id}','${bookId}')">
+            <div class="unit-icon">${ch.icon}</div>
+            <div class="unit-title">Kapitel ${ch.number}: ${ch.title}</div>
+            <div class="unit-desc">${ch.subtitle}</div>
+            <div style="font-size:.75rem;color:${book.color};margin:6px 0">🎓 ${ch.grammarFocus}</div>
+            <div class="unit-skills-row">
+              <span class="skill-chip">✏️ Schreiben</span>
+              <span class="skill-chip">🎧 Hören</span>
+              <span class="skill-chip">📖 Lesen</span>
+              <span class="skill-chip">🎤 Sprechen</span>
+            </div>
+            <div style="font-size:.75rem;color:var(--text3);margin-top:8px">📚 ${ch.vocab.length} Vokabeln</div>
+          </div>`).join('')}
+      </div>
+    `;
+  },
+
+  _openBookChapter(chapterId, bookId) {
+    const book = BOOK_NETZWERK_B1;
+    const ch = book.chapters.find(c => c.id === chapterId);
+    if (!ch) return;
+
+    const skillMeta = [
+      { key:'schreiben', label:'Schreiben', icon:'✏️' },
+      { key:'hoeren',    label:'Hören',     icon:'🎧' },
+      { key:'lesen',     label:'Lesen',     icon:'📖' },
+      { key:'sprechen',  label:'Sprechen',  icon:'🎤' },
+    ];
+
+    const activeSkill = 'schreiben';
+    const body = document.getElementById('modal-body');
+
+    body.innerHTML = `
+      <div class="modal-title">${ch.icon} Kapitel ${ch.number}: ${ch.title}</div>
+      <div class="modal-subtitle">🎓 ${ch.grammarFocus}</div>
+
+      <div style="margin-bottom:16px">
+        <div style="font-weight:600;font-size:.85rem;margin-bottom:8px;color:var(--text2)">📚 Kapitel-Vokabeln:</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          ${ch.vocab.map(v => `
+            <div class="vocab-chip" onclick="App._addFromBook('${v.word.replace(/'/g,"\\'")}',${'\''  + v.translation.replace(/'/g,"\\'") + '\''},'${(v.example||'').replace(/'/g,"\\'")}')" title="Klicken um zur Vokabelliste hinzuzufügen">
+              <strong>${v.word}</strong> – ${v.translation}
+            </div>`).join('')}
+        </div>
+      </div>
+
+      <div class="skill-tabs-wrap" style="margin-bottom:16px">
+        ${skillMeta.map(s => `
+          <button class="skill-tab${s.key===activeSkill?' active':''}" onclick="App._switchBookSkill('${chapterId}','${bookId}','${s.key}')">
+            ${s.icon} ${s.label}
+          </button>`).join('')}
+      </div>
+
+      <div id="book-ex-area">
+        ${this._buildBookExArea(ch, activeSkill, 0)}
+      </div>
+    `;
+
+    document.getElementById('modal').style.display = 'flex';
+  },
+
+  _switchBookSkill(chId, bookId, skill) {
+    const ch = BOOK_NETZWERK_B1.chapters.find(c => c.id === chId);
+    if (!ch) return;
+    document.querySelectorAll('.skill-tab').forEach(t => {
+      const icons = {schreiben:'Schreiben',hoeren:'Hören',lesen:'Lesen',sprechen:'Sprechen'};
+      t.classList.toggle('active', t.textContent.trim().includes(icons[skill]));
+    });
+    document.getElementById('book-ex-area').innerHTML = this._buildBookExArea(ch, skill, 0);
+  },
+
+  _buildBookExArea(ch, skill, idx) {
+    const skillData = ch.skills[skill];
+    if (!skillData || !skillData.exercises || !skillData.exercises.length) {
+      return '<div style="padding:20px;text-align:center;color:var(--text3)">Keine Übungen für diesen Bereich.</div>';
+    }
+    const exercises = skillData.exercises;
+    const ex = exercises[idx];
+    const total = exercises.length;
+
+    return `
+      <div>
+        <div style="display:flex;gap:4px;margin-bottom:16px">
+          ${exercises.map((_,i) => `<div class="ex-step${i===idx?' current':''}"></div>`).join('')}
+        </div>
+        ${this._buildExercise(ex, idx, ch.id, skill)}
+        <div class="ex-actions" style="margin-top:16px">
+          ${idx > 0 ? `<button class="btn btn-secondary btn-sm" onclick="App._navBookEx('${ch.id}','netzwerk-b1','${skill}',${idx-1})">← Zurück</button>` : ''}
+          ${idx < total-1 ? `<button class="btn btn-primary btn-sm" onclick="App._navBookEx('${ch.id}','netzwerk-b1','${skill}',${idx+1})">Weiter →</button>` : `<button class="btn btn-success btn-sm" onclick="App._bookExDone('${ch.id}','${skill}')">✅ Abgeschlossen!</button>`}
+          <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="App.closeModal()">✕ Schließen</button>
+        </div>
+      </div>`;
+  },
+
+  _navBookEx(chId, bookId, skill, idx) {
+    const ch = BOOK_NETZWERK_B1.chapters.find(c => c.id === chId);
+    if (!ch) return;
+    document.getElementById('book-ex-area').innerHTML = this._buildBookExArea(ch, skill, idx);
+  },
+
+  _bookExDone(chId, skill) {
+    this.toast('🎉 Kapitel abgeschlossen! Super!', 'success');
+    this._confetti();
+    this.closeModal();
+  },
+
+  _addFromBook(word, translation, example) {
+    const result = Vocab.add(word, translation, example, 'B1');
+    if (result === 'exists') {
+      this.toast(`"${word}" ist bereits in deiner Liste`, 'info');
+    } else {
+      this.toast(`"${word}" zu Vokabeln hinzugefügt! ✅`, 'success');
+      const badge = document.getElementById('vocab-badge');
+      if (badge) badge.textContent = Vocab.getCount();
+    }
   },
 
   /* ======================================================
