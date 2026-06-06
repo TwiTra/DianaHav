@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeutschLern – Diana</title>
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<canvas id="confetti-canvas" style="position:fixed;top:0;left:0;pointer-events:none;z-index:9999;display:none"></canvas>
+
+<div class="app-shell">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-icon">🇩🇪</span>
+      <div>
+        <div class="logo-title">DeutschLern</div>
+        <div class="logo-sub">für Diana ✨</div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-group">
+        <div class="nav-group-label">Übersicht</div>
+        <a class="nav-link active" data-page="home" href="#">🏠 Dashboard</a>
+        <a class="nav-link" data-page="vocabulary" href="#"><span id="vocab-badge" class="badge">0</span>🃏 Vokabeln</a>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-group-label">Sprachniveaus</div>
+        <a class="nav-link" data-page="level" data-level="A1" href="#">🟢 A1 – Anfänger</a>
+        <a class="nav-link" data-page="level" data-level="A2" href="#">🔵 A2 – Grundkenntnisse</a>
+        <a class="nav-link" data-page="level" data-level="B1" href="#">🟣 B1 – Mittelstufe</a>
+        <a class="nav-link" data-page="level" data-level="B2" href="#">🟡 B2 – Oberstufe</a>
+        <a class="nav-link" data-page="level" data-level="C1" href="#">🔴 C1 – Fortgeschritten</a>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-group-label">Bücher</div>
+        <a class="nav-link" data-page="books" href="#">📚 Alle Bücher</a>
+        <a class="nav-link" data-page="book" data-book="netzwerk-b1" href="#">📗 Netzwerk B1 Neu</a>
+      </div>
+    </nav>
+
+    <div class="sidebar-bottom">
+      <button id="theme-toggle" class="theme-btn">🌙</button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main-area">
+    <header class="topbar">
+      <button class="menu-btn" id="menu-btn">☰</button>
+      <div class="breadcrumb" id="breadcrumb">Dashboard</div>
+    </header>
+    <div class="page-wrap" id="page-wrap"></div>
+  </main>
+
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal" style="display:none">
+  <div class="modal-box">
+    <button class="modal-close-btn" id="modal-close">✕</button>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<!-- TOASTS -->
+<div class="toasts" id="toasts"></div>
+
+<script src="js/data.js"></script>
+<script src="js/books/netzwerk-b1.js"></script>
+<script src="js/vocabulary.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
