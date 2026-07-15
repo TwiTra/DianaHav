@@ -1,0 +1,61 @@
+name: Windows-Programm bauen (EXE)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'arbeitsplan/**'
+      - 'desktop/**'
+      - '.github/workflows/desktop.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Code auschecken
+        uses: actions/checkout@v4
+
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Abhängigkeiten installieren
+        working-directory: desktop
+        run: npm install
+
+      - name: EXE bauen (Installer + Portable)
+        working-directory: desktop
+        run: npm run dist
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: EXE-Dateien als Artefakt hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: Arbeitsplaner-Windows
+          path: desktop/dist/*.exe
+          if-no-files-found: error
+
+      - name: Release aktualisieren (nur auf main)
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete windows-exe --yes || true
+          git push origin :refs/tags/windows-exe || true
+          gh release create windows-exe \
+            --title "Arbeitsplaner für Windows" \
+            --notes "Neueste Version des Arbeitsplaners als Windows-Programm.
+
+          **Download:**
+          - \`Arbeitsplaner-Setup-…exe\` – Installiert das Programm (empfohlen, mit Startmenü-Eintrag)
+          - \`Arbeitsplaner-Portable-…exe\` – Läuft direkt ohne Installation, z. B. vom USB-Stick
+
+          Hinweis: Beim ersten Start zeigt Windows evtl. den SmartScreen-Hinweis, da das Programm nicht signiert ist. Auf »Weitere Informationen« → »Trotzdem ausführen« klicken." \
+            desktop/dist/*.exe
