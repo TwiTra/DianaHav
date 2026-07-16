@@ -1,7 +1,9 @@
 /* ============================================================
    Arbeitsplaner – Arbeitspläne (Schichtplan)
-   Mitarbeiter × Tage, Klick-Planung mit Schicht-Pinsel,
-   Urlaubs-Hinweise, Stundensumme, Export & Druck
+   Drei wählbare Designs (Klassisch, Wochen-Vorlage, Excel),
+   Klick-Planung mit Schicht-Pinsel, Urlaubs-Hinweise,
+   Stundensumme, Export & Druck. Die Schichtdaten sind vom
+   Design unabhängig – ein Wechsel behält alle Einträge.
    ============================================================ */
 
 let planView = { year: new Date().getFullYear(), month: new Date().getMonth() };
@@ -9,7 +11,6 @@ let planBrush = null; // ausgewählte Schicht-ID, 'ERASE' oder null (= Auswahl-D
 
 function renderPlanPage(el) {
   const { year, month } = planView;
-  const days = monthMeta(year, month);
   const persons = activePersons();
 
   if (!persons.length) {
@@ -24,13 +25,126 @@ function renderPlanPage(el) {
     return;
   }
 
+  const design = currentPlanDesign();
+
   // Pinsel-Palette
   const brushes = state.shiftTypes.map(s =>
     `<button class="brush ${planBrush === s.id ? 'active' : ''}" data-brush="${s.id}" style="--c:${s.color}" title="${esc(s.label)}${s.start ? ' (' + s.start + '–' + s.end + ')' : ''}">
       ${esc(s.code)}<span class="brush-label">${esc(s.label)}</span>
     </button>`).join('');
 
-  // Tabellenkopf
+  let planBody;
+  if (design === 'wochen')     planBody = planScreenWochen(year, month, persons);
+  else if (design === 'excel') planBody = planScreenExcel(year, month, persons);
+  else                         planBody = planScreenClassic(year, month, persons);
+
+  el.innerHTML = `
+    <div class="page-head">
+      <div>
+        <h1>Arbeitsplan – ${MONTHS[month]} ${year}</h1>
+        <p class="page-sub">Schicht wählen und auf die Tage klicken. Rechtsklick löscht eine Zelle. 🌴 = laut Urlaubsplan im Urlaub.</p>
+      </div>
+      <div class="btn-row">
+        <select id="plan-design" class="design-select" title="Design des Arbeitsplans – die Schichten bleiben beim Wechsel erhalten">
+          ${PLAN_DESIGNS.map(d => `<option value="${d.id}" ${design === d.id ? 'selected' : ''}>🎨 ${d.label}</option>`).join('')}
+        </select>
+        <button class="btn" id="plan-prev" title="Voriger Monat">‹</button>
+        <button class="btn" id="plan-today">Heute</button>
+        <button class="btn" id="plan-next" title="Nächster Monat">›</button>
+      </div>
+    </div>
+
+    <div class="card brush-bar">
+      <span class="brush-bar-label">Schicht-Pinsel:</span>
+      ${brushes}
+      <button class="brush brush-erase ${planBrush === 'ERASE' ? 'active' : ''}" data-brush="ERASE" title="Zellen leeren">⌫<span class="brush-label">Radierer</span></button>
+      <button class="brush brush-none ${planBrush === null ? 'active' : ''}" data-brush="" title="Bei Klick Auswahl anzeigen">🖱️<span class="brush-label">Auswahl</span></button>
+    </div>
+
+    ${planBody}
+
+    <div class="card export-bar">
+      <span class="export-label">Exportieren &amp; Drucken (im gewählten Design):</span>
+      <button class="btn" id="exp-print">🖨️ Drucken (A4)</button>
+      <button class="btn" id="exp-pdf">📄 PDF</button>
+      <button class="btn" id="exp-png">🖼️ PNG</button>
+      <button class="btn" id="exp-word">📝 Word</button>
+      <button class="btn" id="exp-excel">📊 Excel</button>
+      <button class="btn" id="exp-csv">🗂️ CSV</button>
+      <span class="export-spacer"></span>
+      <button class="btn" id="plan-copy">↩︎ Vormonat übernehmen</button>
+      <button class="btn btn-danger-ghost" id="plan-clear">Monat leeren</button>
+    </div>`;
+
+  // Design-Wechsel: nur die Ansicht ändert sich, alle Schichten bleiben
+  el.querySelector('#plan-design').onchange = (e) => {
+    state.settings.planDesign = e.target.value;
+    saveState();
+    renderPlanPage(el);
+    toast('Design gewechselt – alle Schichten wurden übernommen ✓', 'success');
+  };
+
+  // Navigation
+  el.querySelector('#plan-prev').onclick = () => { shiftPlanMonth(-1); renderPlanPage(el); };
+  el.querySelector('#plan-next').onclick = () => { shiftPlanMonth(1); renderPlanPage(el); };
+  el.querySelector('#plan-today').onclick = () => {
+    planView = { year: new Date().getFullYear(), month: new Date().getMonth() };
+    renderPlanPage(el);
+  };
+
+  // Pinsel
+  el.querySelectorAll('.brush').forEach(b => b.onclick = () => {
+    const v = b.dataset.brush;
+    planBrush = v === '' ? null : v;
+    el.querySelectorAll('.brush').forEach(x => x.classList.toggle('active', x === b));
+  });
+
+  bindPlanCells(el);
+
+  // Export
+  el.querySelector('#exp-print').onclick = () => printPlan(year, month);
+  el.querySelector('#exp-pdf').onclick   = () => exportPlanPDF(year, month);
+  el.querySelector('#exp-png').onclick   = () => exportPlanPNG(year, month);
+  el.querySelector('#exp-word').onclick  = () => exportPlanWord(year, month);
+  el.querySelector('#exp-excel').onclick = () => exportPlanExcel(year, month);
+  el.querySelector('#exp-csv').onclick   = () => exportPlanCSV(year, month);
+
+  // Vormonat übernehmen / Monat leeren
+  el.querySelector('#plan-copy').onclick = () => copyPreviousMonth(el);
+  el.querySelector('#plan-clear').onclick = () => {
+    confirmDialog(`Wirklich alle Schichten im ${MONTHS[month]} ${year} löschen?`, () => {
+      for (const d of monthMeta(year, month)) delete state.schedule[d.iso];
+      saveState();
+      renderPlanPage(el);
+      toast('Monat geleert', 'success');
+    });
+  };
+}
+
+/* Klick-/Rechtsklick-Verhalten – für alle Designs identisch */
+function bindPlanCells(el) {
+  el.querySelectorAll('.plan-cell[data-date]').forEach(cell => {
+    cell.onclick = () => {
+      const { date, person } = cell.dataset;
+      if (planBrush === 'ERASE') { setShift(date, person, null); renderPlanPage(el); }
+      else if (planBrush)        { applyBrush(date, person); renderPlanPage(el); }
+      else                       openShiftPicker(date, person);
+    };
+    cell.oncontextmenu = (ev) => {
+      ev.preventDefault();
+      setShift(cell.dataset.date, cell.dataset.person, null);
+      renderPlanPage(el);
+    };
+  });
+}
+
+/* ============================================================
+   DESIGN 1: „Klassisch" – ganzer Monat kompakt
+   ============================================================ */
+
+function planScreenClassic(year, month, persons) {
+  const days = monthMeta(year, month);
+
   let head = '<tr><th class="plan-name-col">Mitarbeiter</th>';
   for (const d of days) {
     const cls = (d.holiday ? 'plan-ft' : d.weekend ? 'plan-we' : '') + (d.iso === fmtISO(new Date()) ? ' plan-today' : '');
@@ -38,7 +152,6 @@ function renderPlanPage(el) {
   }
   head += '<th class="plan-sum-col" title="Arbeitsstunden im Monat (abzüglich Pausen)">Std.</th></tr>';
 
-  // Personenzeilen
   let rows = '';
   for (const p of persons) {
     let hours = 0;
@@ -66,7 +179,6 @@ function renderPlanPage(el) {
     </tr>`;
   }
 
-  // Besetzungszeile
   let staffing = '<tr class="plan-staffing"><td class="plan-name-col">Besetzung</td>';
   for (const d of days) {
     const count = persons.filter(p => {
@@ -77,97 +189,128 @@ function renderPlanPage(el) {
   }
   staffing += '<td></td></tr>';
 
-  el.innerHTML = `
-    <div class="page-head">
-      <div>
-        <h1>Arbeitsplan – ${MONTHS[month]} ${year}</h1>
-        <p class="page-sub">Schicht wählen und auf die Tage klicken. Rechtsklick löscht eine Zelle. 🌴 = laut Urlaubsplan im Urlaub.</p>
-      </div>
-      <div class="btn-row">
-        <button class="btn" id="plan-prev" title="Voriger Monat">‹</button>
-        <button class="btn" id="plan-today">Heute</button>
-        <button class="btn" id="plan-next" title="Nächster Monat">›</button>
-      </div>
+  return `<div class="card plan-card">
+    <div class="plan-scroll">
+      <table class="plan-table">
+        <thead>${head}</thead>
+        <tbody>${rows}${staffing}</tbody>
+      </table>
     </div>
-
-    <div class="card brush-bar">
-      <span class="brush-bar-label">Schicht-Pinsel:</span>
-      ${brushes}
-      <button class="brush brush-erase ${planBrush === 'ERASE' ? 'active' : ''}" data-brush="ERASE" title="Zellen leeren">⌫<span class="brush-label">Radierer</span></button>
-      <button class="brush brush-none ${planBrush === null ? 'active' : ''}" data-brush="" title="Bei Klick Auswahl anzeigen">🖱️<span class="brush-label">Auswahl</span></button>
-    </div>
-
-    <div class="card plan-card">
-      <div class="plan-scroll">
-        <table class="plan-table">
-          <thead>${head}</thead>
-          <tbody>${rows}${staffing}</tbody>
-        </table>
-      </div>
-    </div>
-
-    <div class="card export-bar">
-      <span class="export-label">Exportieren &amp; Drucken:</span>
-      <button class="btn" id="exp-print">🖨️ Drucken (A4)</button>
-      <button class="btn" id="exp-pdf">📄 PDF</button>
-      <button class="btn" id="exp-png">🖼️ PNG</button>
-      <button class="btn" id="exp-word">📝 Word</button>
-      <button class="btn" id="exp-excel">📊 Excel</button>
-      <button class="btn" id="exp-csv">🗂️ CSV</button>
-      <span class="export-spacer"></span>
-      <button class="btn" id="plan-copy">↩︎ Vormonat übernehmen</button>
-      <button class="btn btn-danger-ghost" id="plan-clear">Monat leeren</button>
-    </div>`;
-
-  // Navigation
-  el.querySelector('#plan-prev').onclick = () => { shiftPlanMonth(-1); renderPlanPage(el); };
-  el.querySelector('#plan-next').onclick = () => { shiftPlanMonth(1); renderPlanPage(el); };
-  el.querySelector('#plan-today').onclick = () => {
-    planView = { year: new Date().getFullYear(), month: new Date().getMonth() };
-    renderPlanPage(el);
-  };
-
-  // Pinsel
-  el.querySelectorAll('.brush').forEach(b => b.onclick = () => {
-    const v = b.dataset.brush;
-    planBrush = v === '' ? null : v;
-    el.querySelectorAll('.brush').forEach(x => x.classList.toggle('active', x === b));
-  });
-
-  // Zellen
-  el.querySelectorAll('.plan-cell').forEach(cell => {
-    cell.onclick = () => {
-      const { date, person } = cell.dataset;
-      if (planBrush === 'ERASE') { setShift(date, person, null); renderPlanPage(el); }
-      else if (planBrush)        { applyBrush(date, person); renderPlanPage(el); }
-      else                       openShiftPicker(date, person);
-    };
-    cell.oncontextmenu = (ev) => {
-      ev.preventDefault();
-      setShift(cell.dataset.date, cell.dataset.person, null);
-      renderPlanPage(el);
-    };
-  });
-
-  // Export
-  el.querySelector('#exp-print').onclick = () => printPlan(year, month);
-  el.querySelector('#exp-pdf').onclick   = () => exportPlanPDF(year, month);
-  el.querySelector('#exp-png').onclick   = () => exportPlanPNG(year, month);
-  el.querySelector('#exp-word').onclick  = () => exportPlanWord(year, month);
-  el.querySelector('#exp-excel').onclick = () => exportPlanExcel(year, month);
-  el.querySelector('#exp-csv').onclick   = () => exportPlanCSV(year, month);
-
-  // Vormonat übernehmen / Monat leeren
-  el.querySelector('#plan-copy').onclick = () => copyPreviousMonth(el);
-  el.querySelector('#plan-clear').onclick = () => {
-    confirmDialog(`Wirklich alle Schichten im ${MONTHS[month]} ${year} löschen?`, () => {
-      for (const d of days) delete state.schedule[d.iso];
-      saveState();
-      renderPlanPage(el);
-      toast('Monat geleert', 'success');
-    });
-  };
+  </div>`;
 }
+
+/* ============================================================
+   DESIGN 2: „Wochen" – nach der hochgeladenen Vorlage
+   (dunkles Kopfband, KW-Gruppen, farbige Zeit-Pillen)
+   ============================================================ */
+
+function planScreenWochen(year, month, persons) {
+  const weeks = monthWeeks(year, month);
+  const todayISO = fmtISO(new Date());
+
+  let kwRow = '<tr><th class="w-corner plan-name-col">MITARBEITER</th>';
+  for (const w of weeks) kwRow += `<th class="w-kw" colspan="7">KW ${w.kw}</th>`;
+  kwRow += '<th class="w-corner w-sumh">Σ Std.</th></tr>';
+
+  let dayRow = '<tr><th class="w-dayhead plan-name-col"></th>';
+  for (const w of weeks) {
+    w.days.forEach((d, i) => {
+      const cls = 'w-dayhead' + (d.holiday ? ' w-ft' : d.wd >= 5 ? ' w-sat' : '') + (i === 0 ? ' wsep' : '') +
+        (d.inMonth ? '' : ' w-out') + (d.iso === todayISO ? ' plan-today' : '');
+      dayRow += `<th class="${cls}" title="${esc(d.holiday || WEEKDAYS[d.wd])}"><b>${WEEKDAYS_SHORT[d.wd]}</b><span>${fmtDDMM(d.date)}</span></th>`;
+    });
+  }
+  dayRow += '<th class="w-dayhead"></th></tr>';
+
+  let rows = '';
+  for (const p of persons) {
+    const initials = p.name.split(' ').map(x => x[0] || '').slice(0, 2).join('').toUpperCase();
+    let cells = '';
+    for (const w of weeks) {
+      w.days.forEach((d, i) => {
+        const sep = i === 0 ? ' wsep' : '';
+        if (!d.inMonth) { cells += `<td class="w-cell plan-out${sep}"></td>`; return; }
+        const shift = shiftById(getShift(d.iso, p.id));
+        const vac = vacationOn(d.iso, p.id);
+        const conflict = vac && shift && shift.kind === 'arbeit';
+        const cls = 'plan-cell w-cell' + (d.holiday ? ' w-ftcol' : d.wd >= 5 ? ' w-satcol' : '') + sep + (conflict ? ' plan-conflict' : '');
+        let inner;
+        if (shift) inner = `<div class="wpill" style="--c:${shift.color}">${esc(shiftPillLabel(shift))}</div>`;
+        else if (vac) inner = `<span class="vac-hint" title="Laut Urlaubsplan im Urlaub">🌴</span>`;
+        else inner = '<span class="w-dot">·</span>';
+        const tip = conflict ? '⚠️ Achtung: laut Urlaubsplan im Urlaub!' : '';
+        cells += `<td class="${cls}" data-date="${d.iso}" data-person="${p.id}" ${tip ? `title="${esc(tip)}"` : ''}>${inner}</td>`;
+      });
+    }
+    const hours = monthWorkHours(p.id, year, month);
+    rows += `<tr>
+      <td class="plan-name-col w-name"><span class="w-avatar">${esc(initials)}</span>${esc(p.name)}</td>
+      ${cells}
+      <td class="w-sum">${hours ? hours.toFixed(1).replace('.', ',') : '–'}</td>
+    </tr>`;
+  }
+
+  return `<div class="card wochen-card">
+    <div class="wochen-band">
+      <div>
+        <span class="wochen-label">ARBEITSPLAN</span>
+        <div class="wochen-title">${MONTHS[month]} ${year}</div>
+      </div>
+      <div class="wochen-meta">${state.settings.firma ? 'Standort / Team: <b>' + esc(state.settings.firma) + '</b>' : ''}</div>
+    </div>
+    <div class="plan-scroll">
+      <table class="wochen-table">
+        <thead>${kwRow}${dayRow}</thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+/* ============================================================
+   DESIGN 3: „Excel-Tabelle" – Wochenblöcke untereinander,
+   immer volle Wochen, sodass sich der ganze Monat ergibt
+   ============================================================ */
+
+function planScreenExcel(year, month, persons) {
+  const weeks = monthWeeks(year, month);
+  const todayISO = fmtISO(new Date());
+
+  let blocks = '';
+  for (const w of weeks) {
+    let head = `<tr><th class="x-kw" colspan="8">KW ${w.kw} &nbsp;·&nbsp; ${fmtDDMM(w.days[0].date)} – ${fmtDDMM(w.days[6].date)}</th></tr>`;
+    head += '<tr><th class="x-name">Name</th>' + w.days.map(d => {
+      const cls = 'x-day' + (d.holiday ? ' x-ft' : d.wd >= 5 ? ' x-we' : '') + (d.inMonth ? '' : ' w-out') + (d.iso === todayISO ? ' plan-today' : '');
+      return `<th class="${cls}" title="${esc(d.holiday || WEEKDAYS[d.wd])}">${WEEKDAYS_SHORT[d.wd]}<span>${fmtDDMM(d.date)}</span></th>`;
+    }).join('') + '</tr>';
+
+    let rows = '';
+    for (const p of persons) {
+      rows += `<tr><td class="x-name">${esc(p.name)}</td>`;
+      for (const d of w.days) {
+        if (!d.inMonth) { rows += '<td class="x-cell plan-out"></td>'; continue; }
+        const shift = shiftById(getShift(d.iso, p.id));
+        const vac = vacationOn(d.iso, p.id);
+        const conflict = vac && shift && shift.kind === 'arbeit';
+        const cls = 'plan-cell x-cell' + (d.wd >= 5 ? ' x-wecol' : '') + (conflict ? ' plan-conflict' : '');
+        const style = shift ? ` style="background:${hexToRgba(shift.color, 0.25)}"` : '';
+        let inner = '';
+        if (shift) inner = `<b style="color:${darken(shift.color, 0.6)}">${esc(shift.code)}</b>`;
+        else if (vac) inner = `<span class="vac-hint" title="Laut Urlaubsplan im Urlaub">🌴</span>`;
+        const tip = conflict ? '⚠️ Achtung: laut Urlaubsplan im Urlaub!' : '';
+        rows += `<td class="${cls}"${style} data-date="${d.iso}" data-person="${p.id}" ${tip ? `title="${esc(tip)}"` : ''}>${inner}</td>`;
+      }
+      rows += '</tr>';
+    }
+    blocks += `<table class="excel-table"><colgroup><col class="x-namecol">${'<col>'.repeat(7)}</colgroup><thead>${head}</thead><tbody>${rows}</tbody></table>`;
+  }
+
+  return `<div class="card excel-card">${blocks}</div>`;
+}
+
+/* ============================================================
+   Gemeinsame Logik
+   ============================================================ */
 
 function applyBrush(dateISO, personId) {
   const vac = vacationOn(dateISO, personId);
@@ -217,11 +360,9 @@ function copyPreviousMonth(el) {
   const prevDays = monthMeta(py, pm);
   const curDays = monthMeta(year, month);
 
-  // Muster: Schichten des Vormonats nach Wochentag+Woche übertragen
   confirmDialog(`Schichten aus ${MONTHS[pm]} ${py} in den ${MONTHS[month]} ${year} übernehmen? Bestehende Einträge werden überschrieben.`, () => {
-    // Für jede Person: Wochentag-Muster der ersten 4 Wochen des Vormonats fortschreiben
+    // Für jede Person: Wochentag-Muster der letzten 4 vollen Wochen fortschreiben
     for (const p of activePersons()) {
-      // Muster der letzten 28 Tage des Vormonats (volle 4 Wochen)
       const pattern = [];
       const startIdx = Math.max(0, prevDays.length - 28);
       for (let i = startIdx; i < prevDays.length; i++) {

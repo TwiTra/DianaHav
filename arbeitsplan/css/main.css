@@ -381,6 +381,91 @@ thead .plan-ft{background:color-mix(in srgb, #e34948 18%, var(--surface2))}
 .plan-staffing td{background:var(--surface2);font-weight:700;font-size:.72rem;color:var(--text2)}
 .staffing-zero{color:var(--danger) !important}
 
+/* Design-Auswahl */
+.design-select{
+  width:auto;min-width:210px;
+  background:var(--surface);
+  font-weight:600;font-size:.85rem;
+  cursor:pointer;
+}
+
+/* Zellen außerhalb des Monats (Wochen-/Excel-Design) */
+.plan-out{background:color-mix(in srgb, var(--text3) 10%, var(--surface)) !important;cursor:default !important}
+
+/* ---- Design „Wochen" (Vorlage) ---- */
+.wochen-card{padding:0;overflow:hidden}
+.wochen-band{
+  background:#233447;color:#fff;
+  padding:16px 22px 14px;
+  display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;
+}
+.wochen-label{font-size:.66rem;letter-spacing:.24em;color:#9fb4c9;font-weight:700}
+.wochen-title{font-size:1.5rem;font-weight:800;line-height:1.2}
+.wochen-meta{font-size:.75rem;color:#c9d6e2}
+.wochen-table{border-collapse:collapse;width:100%;font-size:.74rem}
+.wochen-table th,.wochen-table td{border:1px solid var(--border);padding:2px 1px;text-align:center}
+.wochen-table .wsep{border-left:2px solid color-mix(in srgb, var(--text3) 60%, transparent) !important}
+.wochen-table th.w-corner{background:#233447;color:#fff;text-align:left;font-size:.66rem;letter-spacing:.08em;padding:6px 10px}
+.w-sumh{text-align:center !important;min-width:44px}
+.w-kw{background:#2e4258;color:#fff;padding:5px 2px !important;font-size:.74rem;letter-spacing:.05em}
+.w-dayhead{background:var(--surface2);font-size:.62rem;line-height:1.25;padding:4px 0 !important}
+.w-dayhead b{display:block;color:var(--text2)}
+.w-dayhead span{display:block;color:var(--text3);font-weight:400;font-size:.58rem}
+.w-sat{background:color-mix(in srgb, #eda100 14%, var(--surface2))}
+.w-ft{background:color-mix(in srgb, #e34948 14%, var(--surface2))}
+.w-out{opacity:.45}
+.w-name{font-weight:600}
+.w-avatar{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:24px;height:24px;border-radius:50%;
+  background:#233447;color:#fff;font-size:.6rem;font-weight:700;
+  margin-right:7px;vertical-align:middle;flex-shrink:0;
+}
+[data-theme="dark"] .w-avatar{background:#3d5a7a}
+.w-cell{cursor:pointer;height:38px;position:relative;transition:box-shadow .1s}
+.w-cell:hover{box-shadow:inset 0 0 0 2px var(--primary)}
+.w-satcol{background:color-mix(in srgb, #eda100 6%, var(--surface))}
+.w-ftcol{background:color-mix(in srgb, #e34948 6%, var(--surface))}
+.w-dot{color:var(--text3);font-size:.9rem}
+.wpill{
+  --c:#888;
+  background:color-mix(in srgb, var(--c) 28%, var(--surface));
+  border-radius:6px;
+  margin:2px;padding:5px 1px;
+  font-weight:700;font-size:.62rem;letter-spacing:-.01em;
+  color:var(--text);
+  overflow:hidden;white-space:nowrap;
+}
+.w-sum{font-weight:700;background:var(--surface2);color:var(--text2)}
+
+/* ---- Design „Excel-Tabelle" ---- */
+.excel-card{padding:14px}
+.excel-table{
+  border-collapse:collapse;width:100%;
+  font-size:.8rem;margin-bottom:14px;table-layout:fixed;
+}
+.excel-table:last-child{margin-bottom:0}
+.excel-table th,.excel-table td{
+  border:1px solid color-mix(in srgb, var(--text3) 55%, transparent);
+  padding:3px 4px;text-align:center;
+}
+.x-namecol{width:150px}
+.x-kw{
+  background:#217346;color:#fff;
+  text-align:left !important;padding:5px 10px !important;
+  font-size:.78rem;letter-spacing:.02em;
+}
+[data-theme="dark"] .x-kw{background:#1a5c38}
+.x-name{text-align:left !important;padding:3px 10px !important;font-weight:600;background:var(--surface);white-space:nowrap;overflow:hidden}
+thead .x-name{background:color-mix(in srgb, #217346 14%, var(--surface2))}
+.x-day{background:color-mix(in srgb, #217346 14%, var(--surface2));font-size:.7rem;line-height:1.25}
+.x-day span{display:block;font-weight:400;font-size:.62rem;color:var(--text2)}
+.x-we{background:color-mix(in srgb, var(--text3) 25%, var(--surface2))}
+.x-ft{background:color-mix(in srgb, #e34948 16%, var(--surface2))}
+.x-cell{cursor:pointer;height:32px;transition:box-shadow .1s}
+.x-cell:hover{box-shadow:inset 0 0 0 2px var(--primary)}
+.x-wecol{background:color-mix(in srgb, var(--text3) 8%, var(--surface))}
+
 .export-bar{
   display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 14px;
 }
