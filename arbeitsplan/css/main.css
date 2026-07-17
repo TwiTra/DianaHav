@@ -438,33 +438,61 @@ thead .plan-ft{background:color-mix(in srgb, #e34948 18%, var(--surface2))}
 }
 .w-sum{font-weight:700;background:var(--surface2);color:var(--text2)}
 
-/* ---- Design „Excel-Tabelle" ---- */
-.excel-card{padding:14px}
-.excel-table{
-  border-collapse:collapse;width:100%;
-  font-size:.8rem;margin-bottom:14px;table-layout:fixed;
+/* ---- Design „Excel-Tabelle" – exakte Kopie der Arbeitsplan.xlsx ----
+   Feste Farben aus der Original-Datei; bewusst auch im Dunkelmodus
+   als weißes „Blatt", damit die Kopie originalgetreu bleibt. */
+.xls-card{padding:12px;background:#fff}
+.xls-table{
+  border-collapse:collapse;width:100%;min-width:980px;
+  table-layout:fixed;
+  font-family:Calibri,'Segoe UI',Arial,sans-serif;
+  color:#111;
 }
-.excel-table:last-child{margin-bottom:0}
-.excel-table th,.excel-table td{
-  border:1px solid color-mix(in srgb, var(--text3) 55%, transparent);
-  padding:3px 4px;text-align:center;
+.xls-namecol{width:130px}
+.xls-gapcol{width:10px}
+.xls-title{
+  background:#1f3a5f;color:#fff;
+  font-size:1.15rem;font-weight:700;
+  padding:9px 14px;
 }
-.x-namecol{width:150px}
-.x-kw{
-  background:#217346;color:#fff;
-  text-align:left !important;padding:5px 10px !important;
-  font-size:.78rem;letter-spacing:.02em;
+.xls-kw{
+  background:#4a5568;color:#fff;
+  border:1px solid #a0aec0;
+  font-weight:700;font-size:.72rem;letter-spacing:.03em;
+  text-align:center;padding:4px;
 }
-[data-theme="dark"] .x-kw{background:#1a5c38}
-.x-name{text-align:left !important;padding:3px 10px !important;font-weight:600;background:var(--surface);white-space:nowrap;overflow:hidden}
-thead .x-name{background:color-mix(in srgb, #217346 14%, var(--surface2))}
-.x-day{background:color-mix(in srgb, #217346 14%, var(--surface2));font-size:.7rem;line-height:1.25}
-.x-day span{display:block;font-weight:400;font-size:.62rem;color:var(--text2)}
-.x-we{background:color-mix(in srgb, var(--text3) 25%, var(--surface2))}
-.x-ft{background:color-mix(in srgb, #e34948 16%, var(--surface2))}
-.x-cell{cursor:pointer;height:32px;transition:box-shadow .1s}
-.x-cell:hover{box-shadow:inset 0 0 0 2px var(--primary)}
-.x-wecol{background:color-mix(in srgb, var(--text3) 8%, var(--surface))}
+.xls-gap{border:none;background:#fff}
+.xls-name{
+  background:#2c5282;color:#fff;
+  border:1px solid #a0aec0;
+  font-weight:700;font-size:.8rem;
+  padding:4px 9px;vertical-align:middle;
+}
+.xls-dh{
+  background:#edf2f7;color:#2d3748;
+  border:1px solid #a0aec0;
+  font-weight:700;font-size:.64rem;
+  text-align:center;padding:3px 1px;
+  white-space:nowrap;overflow:hidden;
+}
+.xls-dh-sa{background:#ffedd5}
+.xls-dh-ft{background:#c53030;color:#fff}
+.xls-out{opacity:.55}
+.xls-cell{
+  background:#fff;
+  border:1px solid #a0aec0;
+  font-weight:700;font-size:.74rem;
+  text-align:center;padding:6px 1px;
+  height:30px;cursor:pointer;
+  white-space:nowrap;overflow:hidden;
+  transition:box-shadow .1s;
+}
+.xls-cell:hover{box-shadow:inset 0 0 0 2px #2f6f8f}
+.xls-sa{background:#fff7ed}
+.xls-ft{background:#fed7d7 !important;color:#742a2a}
+.xls-sep td{border:none;height:7px;background:#fff}
+.xls-table .plan-today{outline:2px solid #2f6f8f;outline-offset:-2px}
+.xls-table .plan-conflict{outline:2px solid #eda100;outline-offset:-2px}
 
 .export-bar{
   display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 14px;

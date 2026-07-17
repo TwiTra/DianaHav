@@ -21,8 +21,8 @@ function currentPlanDesign() {
 /* Breite und Papier-Ausrichtung je Design */
 function designExportSpec() {
   switch (currentPlanDesign()) {
-    case 'wochen': return { width: 1400, orient: 'landscape' };
-    case 'excel':  return { width: 900,  orient: 'portrait' };
+    case 'wochen': return { width: 1360, orient: 'landscape' };
+    case 'excel':  return { width: 1150, orient: 'landscape' };
     default:       return { width: 1140, orient: 'landscape' };
   }
 }
@@ -82,9 +82,36 @@ function monthWeeks(year, month) {
   return weeks;
 }
 
+/* Immer 6 Wochen (voller Monat + Woche 5 und 6) – für das Excel-Design */
+function monthWeeks6(year, month) {
+  const weeks = monthWeeks(year, month);
+  while (weeks.length < 6) {
+    const last = weeks[weeks.length - 1].days[6].date;
+    const start = addDays(last, 1);
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const dd = addDays(start, i);
+      const iso = fmtISO(dd);
+      days.push({ date: dd, iso, day: dd.getDate(), wd: i, inMonth: dd.getMonth() === month, holiday: holidayName(iso) });
+    }
+    weeks.push({ kw: isoWeekNo(start), days });
+  }
+  return weeks;
+}
+
 function planTitle(year, month) {
   const firma = state.settings.firma ? state.settings.firma + ' – ' : '';
   return firma + 'Arbeitsplan ' + MONTHS[month] + ' ' + year;
+}
+
+/* „01.06" ohne Endpunkt – wie in der Excel-Vorlage */
+function fmtDDMMs(date) {
+  return String(date.getDate()).padStart(2, '0') + '.' + String(date.getMonth() + 1).padStart(2, '0');
+}
+
+/* Text einer Zelle wie in der Excel-Vorlage: Zeiten oder Name */
+function excelCellText(shift) {
+  return shift.start ? shiftPillLabel(shift) : shift.label;
 }
 
 function fmtDDMM(date) {
@@ -221,21 +248,21 @@ function buildWochenExportHTML(year, month) {
   h += `<table style="border-collapse:collapse;width:100%;table-layout:fixed;font-size:8pt;margin-top:8px">`;
   // Spaltenbreiten: Name 120, Tage flexibel, Summe 46
   h += '<colgroup><col style="width:118px"/>' +
-    weeks.map(w => w.days.map(() => '<col/>').join('')).join('') +
+    weeks.map(w => w.days.filter(d => d.wd < 6).map(() => '<col/>').join('')).join('') +
     '<col style="width:46px"/></colgroup>';
 
   // KW-Zeile
   h += `<tr><th style="background:#233447;color:#fff;padding:5px 8px;text-align:left;font-size:7.5pt;letter-spacing:1px;border:1px solid #233447">MITARBEITER</th>`;
   for (const w of weeks) {
-    h += `<th colspan="7" style="background:#2e4258;color:#fff;padding:4px;border:1px solid #fff;font-size:8pt">KW ${w.kw}</th>`;
+    h += `<th colspan="6" style="background:#2e4258;color:#fff;padding:4px;border:1px solid #fff;font-size:8pt">KW ${w.kw}</th>`;
   }
   h += `<th style="background:#233447;color:#fff;padding:4px 2px;border:1px solid #233447;font-size:7pt">Σ Std.</th></tr>`;
 
   // Tages-Zeile
   h += `<tr><th style="background:#eef1f5;border:1px solid #d8dde4">&#160;</th>`;
   for (const w of weeks) {
-    w.days.forEach((d, i) => {
-      const bg = d.holiday ? '#fde7e4' : (d.wd >= 5 ? '#f6ecdc' : '#eef1f5');
+    w.days.filter(d => d.wd < 6).forEach((d, i) => {
+      const bg = d.holiday ? '#fde7e4' : (d.wd === 5 ? '#f6ecdc' : '#eef1f5');
       const sep = i === 0 ? 'border-left:2px solid #9aa6b4;' : '';
       h += `<th style="background:${bg};border:1px solid #d8dde4;${sep}padding:3px 0;font-size:6.5pt;color:#41566b;${d.inMonth ? '' : 'opacity:.45'}">` +
         `<b>${WEEKDAYS_SHORT[d.wd]}</b><br/><span style="color:#7a8a99;font-weight:400">${fmtDDMM(d.date)}</span></th>`;
@@ -250,13 +277,13 @@ function buildWochenExportHTML(year, month) {
       `<span style="display:inline-block;width:20px;height:20px;line-height:20px;border-radius:50%;background:#233447;color:#fff;font-size:6.5pt;font-weight:700;text-align:center;vertical-align:middle">${esc(initials)}</span> ` +
       `<b style="font-size:8pt">${esc(p.name)}</b></td>`;
     for (const w of weeks) {
-      w.days.forEach((d, i) => {
+      w.days.filter(d => d.wd < 6).forEach((d, i) => {
         const sep = i === 0 ? 'border-left:2px solid #9aa6b4;' : '';
         if (!d.inMonth) {
           h += `<td style="border:1px solid #d8dde4;${sep}background:#f4f6f8">&#160;</td>`;
           return;
         }
-        const bg = d.holiday ? 'background:rgba(192,57,43,.05);' : (d.wd >= 5 ? 'background:#fcf8f1;' : '');
+        const bg = d.holiday ? 'background:rgba(192,57,43,.05);' : (d.wd === 5 ? 'background:#fcf8f1;' : '');
         const s = shiftById(getShift(d.iso, p.id));
         if (s) {
           h += `<td style="border:1px solid #d8dde4;${sep}${bg}padding:2px 0;text-align:center">` +
@@ -284,45 +311,72 @@ function buildWochenExportHTML(year, month) {
   return h;
 }
 
-/* ---------- Design „Excel-Tabelle": Wochenblöcke untereinander,
-   immer volle Wochen = kompletter Monat ---------- */
+/* ---------- Design „Excel-Tabelle": exakte Kopie der
+   hochgeladenen Arbeitsplan.xlsx – zwei Wochenblöcke nebeneinander,
+   drei Blockzeilen = 6 Wochen (Woche 5 und 6 ergänzt) ---------- */
 
 function buildExcelExportHTML(year, month) {
-  const weeks = monthWeeks(year, month);
+  const weeks = monthWeeks6(year, month);
   const persons = activePersons();
   const F = 'Calibri,Arial,sans-serif';
-  const B = 'border:1px solid #a6a6a6;';
+  const left = weeks.slice(0, 3), right = weeks.slice(3, 6);
+  const B = 'border:1px solid #a0aec0;';
+
+  const dayHead = (d) => {
+    const bg = d.holiday ? '#c53030' : (d.wd === 5 ? '#ffedd5' : '#edf2f7');
+    const ink = d.holiday ? '#ffffff' : '#2d3748';
+    return `<td style="${B}background:${bg};color:${ink};font-weight:700;font-size:7.5pt;text-align:center;padding:3px 1px${d.inMonth ? '' : ';opacity:.55'}" title="${esc(d.holiday || '')}">${WEEKDAYS_SHORT[d.wd]} ${fmtDDMMs(d.date)}</td>`;
+  };
+  const valCell = (d, p) => {
+    const s = shiftById(getShift(d.iso, p.id));
+    const satBg = d.wd === 5 ? '#fff7ed' : '#ffffff';
+    if (s) {
+      const ft = s.id === 'FT';
+      const bg = ft ? '#fed7d7' : satBg;
+      const ink = ft ? '#742a2a' : '#111111';
+      return `<td style="${B}background:${bg};color:${ink};font-weight:700;font-size:8.5pt;text-align:center;padding:6px 1px">${esc(excelCellText(s))}</td>`;
+    }
+    if (d.holiday) {
+      return `<td style="${B}background:#fed7d7;color:#742a2a;font-weight:700;font-size:8.5pt;text-align:center;padding:6px 1px">Feiertag</td>`;
+    }
+    return `<td style="${B}background:${satBg}">&#160;</td>`;
+  };
 
   let h = `<div style="font-family:${F};color:#111">`;
-  h += `<h2 style="margin:0 0 10px;font-size:14pt;font-family:${F}">${esc(planTitle(year, month))}</h2>`;
+  h += `<table style="border-collapse:collapse;width:100%;table-layout:fixed">`;
+  h += `<colgroup><col style="width:128px"/>${'<col/>'.repeat(6)}<col style="width:10px"/>${'<col/>'.repeat(6)}</colgroup>`;
 
-  for (const w of weeks) {
-    h += `<table style="border-collapse:collapse;width:100%;margin-bottom:11px;font-size:9pt;table-layout:fixed">`;
-    h += `<colgroup><col style="width:130px"/>${'<col/>'.repeat(7)}</colgroup>`;
-    h += `<tr><th colspan="8" style="background:#217346;color:#fff;text-align:left;padding:4px 8px;${B}border-color:#1a5c38;font-size:9.5pt">` +
-      `KW ${w.kw} &#160;·&#160; ${fmtDDMM(w.days[0].date)} – ${fmtDDMM(w.days[6].date)}${w.days[0].date.getFullYear() !== year || w.days[6].date.getFullYear() !== year ? ' ' : ''}</th></tr>`;
-    h += `<tr><th style="background:#e2efda;${B}padding:3px 8px;text-align:left">Name</th>` +
-      w.days.map(d => {
-        const bg = d.holiday ? '#fbe0dd' : (d.wd >= 5 ? '#d9d9d9' : '#e2efda');
-        return `<th style="background:${bg};${B}padding:3px 0;${d.inMonth ? '' : 'color:#999'}" title="${esc(d.holiday || '')}">${WEEKDAYS_SHORT[d.wd]}<br/><span style="font-weight:400;font-size:7.5pt">${fmtDDMM(d.date)}</span></th>`;
-      }).join('') + '</tr>';
+  // Titelzeile (wie A1: dunkelblau, weiß, groß)
+  h += `<tr><td colspan="14" style="background:#1f3a5f;color:#fff;font-size:15pt;font-weight:700;padding:9px 14px">${esc(planTitle(year, month))}</td></tr>`;
 
-    for (const p of persons) {
-      h += `<tr><td style="${B}padding:3px 8px;font-weight:700;white-space:nowrap;overflow:hidden">${esc(p.name)}</td>`;
-      for (const d of w.days) {
-        if (!d.inMonth) { h += `<td style="${B}background:#f2f2f2">&#160;</td>`; continue; }
-        const s = shiftById(getShift(d.iso, p.id));
-        if (s) {
-          h += `<td style="${B}background:${hexToRgba(s.color, 0.25)};text-align:center;font-weight:700;color:${darken(s.color, 0.65)}">${esc(s.code)}</td>`;
-        } else {
-          h += `<td style="${B}${d.wd >= 5 ? 'background:#f7f7f7' : ''}">&#160;</td>`;
-        }
+  // KW-Zeile (wie B2/I2)
+  const kwLabel = ws => ws.map(w => 'KW ' + w.kw).join('  /  ');
+  h += `<tr><td style="border:none"></td>` +
+    `<td colspan="6" style="${B}background:#4a5568;color:#fff;font-weight:700;font-size:8.5pt;text-align:center;padding:4px">${kwLabel(left)}</td>` +
+    `<td style="border:none"></td>` +
+    `<td colspan="6" style="${B}background:#4a5568;color:#fff;font-weight:700;font-size:8.5pt;text-align:center;padding:4px">${kwLabel(right)}</td></tr>`;
+
+  // Personenblöcke: 3 Paar-Zeilen (Datumskopf + Schichten) je Person
+  for (const p of persons) {
+    for (let i = 0; i < 3; i++) {
+      h += '<tr>';
+      if (i === 0) {
+        h += `<td rowspan="6" style="${B}background:#2c5282;color:#fff;font-weight:700;font-size:9.5pt;padding:4px 8px;vertical-align:middle">${esc(p.name)}</td>`;
       }
+      h += left[i].days.filter(d => d.wd < 6).map(dayHead).join('');
+      h += '<td style="border:none"></td>';
+      h += right[i].days.filter(d => d.wd < 6).map(dayHead).join('');
+      h += '</tr><tr>';
+      h += left[i].days.filter(d => d.wd < 6).map(d => valCell(d, p)).join('');
+      h += '<td style="border:none"></td>';
+      h += right[i].days.filter(d => d.wd < 6).map(d => valCell(d, p)).join('');
       h += '</tr>';
     }
-    h += '</table>';
+    // schmale Trennzeile zwischen Personen (wie Zeile 7 der Vorlage)
+    h += '<tr><td colspan="14" style="border:none;height:6px"></td></tr>';
   }
 
+  h += '</table>';
   h += buildLegendInlineHTML(F);
   h += '</div>';
   return h;

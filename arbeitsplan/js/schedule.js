@@ -209,13 +209,13 @@ function planScreenWochen(year, month, persons) {
   const todayISO = fmtISO(new Date());
 
   let kwRow = '<tr><th class="w-corner plan-name-col">MITARBEITER</th>';
-  for (const w of weeks) kwRow += `<th class="w-kw" colspan="7">KW ${w.kw}</th>`;
+  for (const w of weeks) kwRow += `<th class="w-kw" colspan="6">KW ${w.kw}</th>`;
   kwRow += '<th class="w-corner w-sumh">Σ Std.</th></tr>';
 
   let dayRow = '<tr><th class="w-dayhead plan-name-col"></th>';
   for (const w of weeks) {
-    w.days.forEach((d, i) => {
-      const cls = 'w-dayhead' + (d.holiday ? ' w-ft' : d.wd >= 5 ? ' w-sat' : '') + (i === 0 ? ' wsep' : '') +
+    w.days.filter(d => d.wd < 6).forEach((d, i) => {
+      const cls = 'w-dayhead' + (d.holiday ? ' w-ft' : d.wd === 5 ? ' w-sat' : '') + (i === 0 ? ' wsep' : '') +
         (d.inMonth ? '' : ' w-out') + (d.iso === todayISO ? ' plan-today' : '');
       dayRow += `<th class="${cls}" title="${esc(d.holiday || WEEKDAYS[d.wd])}"><b>${WEEKDAYS_SHORT[d.wd]}</b><span>${fmtDDMM(d.date)}</span></th>`;
     });
@@ -227,13 +227,13 @@ function planScreenWochen(year, month, persons) {
     const initials = p.name.split(' ').map(x => x[0] || '').slice(0, 2).join('').toUpperCase();
     let cells = '';
     for (const w of weeks) {
-      w.days.forEach((d, i) => {
+      w.days.filter(d => d.wd < 6).forEach((d, i) => {
         const sep = i === 0 ? ' wsep' : '';
         if (!d.inMonth) { cells += `<td class="w-cell plan-out${sep}"></td>`; return; }
         const shift = shiftById(getShift(d.iso, p.id));
         const vac = vacationOn(d.iso, p.id);
         const conflict = vac && shift && shift.kind === 'arbeit';
-        const cls = 'plan-cell w-cell' + (d.holiday ? ' w-ftcol' : d.wd >= 5 ? ' w-satcol' : '') + sep + (conflict ? ' plan-conflict' : '');
+        const cls = 'plan-cell w-cell' + (d.holiday ? ' w-ftcol' : d.wd === 5 ? ' w-satcol' : '') + sep + (conflict ? ' plan-conflict' : '');
         let inner;
         if (shift) inner = `<div class="wpill" style="--c:${shift.color}">${esc(shiftPillLabel(shift))}</div>`;
         else if (vac) inner = `<span class="vac-hint" title="Laut Urlaubsplan im Urlaub">🌴</span>`;
@@ -268,44 +268,76 @@ function planScreenWochen(year, month, persons) {
 }
 
 /* ============================================================
-   DESIGN 3: „Excel-Tabelle" – Wochenblöcke untereinander,
-   immer volle Wochen, sodass sich der ganze Monat ergibt
+   DESIGN 3: „Excel-Tabelle" – exakte Kopie der hochgeladenen
+   Arbeitsplan.xlsx: zwei Wochenblöcke nebeneinander, drei
+   Blockzeilen = 6 Wochen (Woche 5 und 6 ergänzt). Alle Tage
+   sind klickbar – auch die aus Nachbarmonaten.
    ============================================================ */
 
 function planScreenExcel(year, month, persons) {
-  const weeks = monthWeeks(year, month);
+  const weeks = monthWeeks6(year, month);
+  const left = weeks.slice(0, 3), right = weeks.slice(3, 6);
   const todayISO = fmtISO(new Date());
 
-  let blocks = '';
-  for (const w of weeks) {
-    let head = `<tr><th class="x-kw" colspan="8">KW ${w.kw} &nbsp;·&nbsp; ${fmtDDMM(w.days[0].date)} – ${fmtDDMM(w.days[6].date)}</th></tr>`;
-    head += '<tr><th class="x-name">Name</th>' + w.days.map(d => {
-      const cls = 'x-day' + (d.holiday ? ' x-ft' : d.wd >= 5 ? ' x-we' : '') + (d.inMonth ? '' : ' w-out') + (d.iso === todayISO ? ' plan-today' : '');
-      return `<th class="${cls}" title="${esc(d.holiday || WEEKDAYS[d.wd])}">${WEEKDAYS_SHORT[d.wd]}<span>${fmtDDMM(d.date)}</span></th>`;
-    }).join('') + '</tr>';
+  const dayHead = d => {
+    const cls = 'xls-dh' + (d.holiday ? ' xls-dh-ft' : d.wd === 5 ? ' xls-dh-sa' : '') +
+      (d.inMonth ? '' : ' xls-out') + (d.iso === todayISO ? ' plan-today' : '');
+    return `<td class="${cls}" title="${esc(d.holiday || WEEKDAYS[d.wd])}">${WEEKDAYS_SHORT[d.wd]} ${fmtDDMMs(d.date)}</td>`;
+  };
+  const valCell = (d, p) => {
+    const s = shiftById(getShift(d.iso, p.id));
+    const vac = vacationOn(d.iso, p.id);
+    const conflict = vac && s && s.kind === 'arbeit';
+    let cls = 'plan-cell xls-cell' + (d.wd === 5 ? ' xls-sa' : '') + (conflict ? ' plan-conflict' : '');
+    let inner = '';
+    if (s) {
+      if (s.id === 'FT') cls += ' xls-ft';
+      inner = esc(excelCellText(s));
+    } else if (d.holiday) {
+      cls += ' xls-ft';
+      inner = 'Feiertag';
+    } else if (vac) {
+      inner = '<span class="vac-hint" title="Laut Urlaubsplan im Urlaub">🌴</span>';
+    }
+    const tip = conflict ? '⚠️ Achtung: laut Urlaubsplan im Urlaub!' : '';
+    return `<td class="${cls}" data-date="${d.iso}" data-person="${p.id}" ${tip ? `title="${esc(tip)}"` : ''}>${inner}</td>`;
+  };
 
-    let rows = '';
-    for (const p of persons) {
-      rows += `<tr><td class="x-name">${esc(p.name)}</td>`;
-      for (const d of w.days) {
-        if (!d.inMonth) { rows += '<td class="x-cell plan-out"></td>'; continue; }
-        const shift = shiftById(getShift(d.iso, p.id));
-        const vac = vacationOn(d.iso, p.id);
-        const conflict = vac && shift && shift.kind === 'arbeit';
-        const cls = 'plan-cell x-cell' + (d.wd >= 5 ? ' x-wecol' : '') + (conflict ? ' plan-conflict' : '');
-        const style = shift ? ` style="background:${hexToRgba(shift.color, 0.25)}"` : '';
-        let inner = '';
-        if (shift) inner = `<b style="color:${darken(shift.color, 0.6)}">${esc(shift.code)}</b>`;
-        else if (vac) inner = `<span class="vac-hint" title="Laut Urlaubsplan im Urlaub">🌴</span>`;
-        const tip = conflict ? '⚠️ Achtung: laut Urlaubsplan im Urlaub!' : '';
-        rows += `<td class="${cls}"${style} data-date="${d.iso}" data-person="${p.id}" ${tip ? `title="${esc(tip)}"` : ''}>${inner}</td>`;
-      }
+  const kwLabel = ws => ws.map(w => 'KW ' + w.kw).join('  /  ');
+  let rows = '';
+  for (const p of persons) {
+    for (let i = 0; i < 3; i++) {
+      rows += '<tr>';
+      if (i === 0) rows += `<td class="xls-name" rowspan="6">${esc(p.name)}</td>`;
+      rows += left[i].days.filter(d => d.wd < 6).map(dayHead).join('');
+      rows += '<td class="xls-gap"></td>';
+      rows += right[i].days.filter(d => d.wd < 6).map(dayHead).join('');
+      rows += '</tr><tr>';
+      rows += left[i].days.filter(d => d.wd < 6).map(d => valCell(d, p)).join('');
+      rows += '<td class="xls-gap"></td>';
+      rows += right[i].days.filter(d => d.wd < 6).map(d => valCell(d, p)).join('');
       rows += '</tr>';
     }
-    blocks += `<table class="excel-table"><colgroup><col class="x-namecol">${'<col>'.repeat(7)}</colgroup><thead>${head}</thead><tbody>${rows}</tbody></table>`;
+    rows += '<tr class="xls-sep"><td colspan="14"></td></tr>';
   }
 
-  return `<div class="card excel-card">${blocks}</div>`;
+  return `<div class="card xls-card">
+    <div class="plan-scroll">
+      <table class="xls-table">
+        <colgroup><col class="xls-namecol">${'<col>'.repeat(6)}<col class="xls-gapcol">${'<col>'.repeat(6)}</colgroup>
+        <tbody>
+          <tr><td class="xls-title" colspan="14">${esc(planTitle(year, month))}</td></tr>
+          <tr>
+            <td class="xls-gap"></td>
+            <td class="xls-kw" colspan="6">${kwLabel(left)}</td>
+            <td class="xls-gap"></td>
+            <td class="xls-kw" colspan="6">${kwLabel(right)}</td>
+          </tr>
+          ${rows}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
 }
 
 /* ============================================================

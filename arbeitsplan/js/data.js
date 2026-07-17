@@ -8,13 +8,15 @@ const STORAGE_KEY = 'arbeitsplaner-v1';
 /* ---------- Standard-Schichtarten ----------
    kind: 'arbeit' | 'frei' | 'urlaub' | 'krank' | 'sonstig'   */
 const DEFAULT_SHIFTS = [
-  { id: 'F',    code: 'F',  label: 'Frühschicht',  start: '06:00', end: '14:00', breakMin: 30, color: '#2a78d6', kind: 'arbeit' },
-  { id: 'S',    code: 'S',  label: 'Spätschicht',  start: '14:00', end: '22:00', breakMin: 30, color: '#eb6834', kind: 'arbeit' },
-  { id: 'N',    code: 'N',  label: 'Nachtschicht', start: '22:00', end: '06:00', breakMin: 30, color: '#4a3aa7', kind: 'arbeit' },
-  { id: 'T',    code: 'T',  label: 'Tagdienst',    start: '08:00', end: '16:30', breakMin: 30, color: '#1baf7a', kind: 'arbeit' },
-  { id: 'FREI', code: 'X',  label: 'Frei',         start: '',      end: '',      breakMin: 0,  color: '#898781', kind: 'frei' },
-  { id: 'U',    code: 'U',  label: 'Urlaub',       start: '',      end: '',      breakMin: 0,  color: '#008300', kind: 'urlaub' },
-  { id: 'K',    code: 'K',  label: 'Krank',        start: '',      end: '',      breakMin: 0,  color: '#e34948', kind: 'krank' },
+  { id: 'F',    code: 'F',  label: 'Frühschicht (06–14)',   start: '06:00', end: '14:00', breakMin: 0, color: '#2a78d6', kind: 'arbeit' },
+  { id: 'T',    code: 'T',  label: 'Tagdienst (10–18)',     start: '10:00', end: '18:00', breakMin: 0, color: '#1baf7a', kind: 'arbeit' },
+  { id: 'S',    code: 'S',  label: 'Spätschicht (14–22)',   start: '14:00', end: '22:00', breakMin: 0, color: '#eb6834', kind: 'arbeit' },
+  { id: 'A',    code: 'A',  label: 'Abenddienst (15:30–22)', start: '15:30', end: '22:00', breakMin: 0, color: '#e87ba4', kind: 'arbeit' },
+  { id: 'N',    code: 'N',  label: 'Nachtschicht (22–06)',  start: '22:00', end: '06:00', breakMin: 0, color: '#4a3aa7', kind: 'arbeit' },
+  { id: 'FREI', code: 'X',  label: 'Frei',                  start: '',      end: '',      breakMin: 0, color: '#898781', kind: 'frei' },
+  { id: 'U',    code: 'U',  label: 'Urlaub',                start: '',      end: '',      breakMin: 0, color: '#008300', kind: 'urlaub' },
+  { id: 'K',    code: 'K',  label: 'Krank',                 start: '',      end: '',      breakMin: 0, color: '#e34948', kind: 'krank' },
+  { id: 'FT',   code: 'FT', label: 'Feiertag',              start: '',      end: '',      breakMin: 0, color: '#c53030', kind: 'frei' },
 ];
 
 const PERSON_COLORS = ['#2a78d6','#008300','#e87ba4','#eda100','#1baf7a','#eb6834','#4a3aa7','#e34948'];
