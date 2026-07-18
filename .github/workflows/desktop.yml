@@ -41,8 +41,7 @@ jobs:
           path: desktop/dist/*.exe
           if-no-files-found: error
 
-      - name: Release aktualisieren (nur auf main)
-        if: github.ref == 'refs/heads/main'
+      - name: Release aktualisieren (Download ohne Anmeldung möglich)
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
