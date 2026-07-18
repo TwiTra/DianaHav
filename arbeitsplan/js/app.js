@@ -305,7 +305,18 @@ function renderSettingsPage(el) {
 
     <div class="card">
       <h3 class="card-title">Datensicherung</h3>
-      <p class="muted" style="margin-bottom:12px">Alle Daten werden nur lokal in diesem Browser gespeichert. Sichere sie regelmäßig als Datei – z. B. bevor du den Browser wechselst oder den Verlauf löschst.</p>
+
+      <div class="form-row">
+        <label>Speicherort der Schnellsicherung (💾-Knopf oben rechts)</label>
+        <div class="btn-row">
+          <input type="text" id="set-backup-path" value="${esc(state.settings.backupPath || '')}" placeholder="Noch kein Ordner gewählt" readonly style="flex:1;min-width:220px">
+          <button class="btn" id="set-backup-choose">📁 Ordner wählen…</button>
+          ${state.settings.backupPath ? '<button class="btn" id="set-backup-clear">Entfernen</button>' : ''}
+        </div>
+        <p class="muted" style="margin-top:6px">Ein Klick auf 💾 (oder Strg+S) legt dort die Datei „${BACKUP_FILENAME}" an und erneuert sie bei jedem weiteren Klick automatisch.</p>
+      </div>
+
+      <p class="muted" style="margin-bottom:12px">Alle Daten werden nur lokal gespeichert. Sichere sie zusätzlich regelmäßig als Datei – z. B. bevor du den Browser wechselst oder den Verlauf löschst.</p>
       <div class="btn-row">
         <button class="btn" id="set-export">⬇️ Sicherung herunterladen (JSON)</button>
         <label class="btn" for="set-import-file" style="cursor:pointer">⬆️ Sicherung einspielen</label>
@@ -328,6 +339,20 @@ function renderSettingsPage(el) {
     updateBadges();
     toast('Einstellungen gespeichert ✓', 'success');
   };
+  el.querySelector('#set-backup-choose').onclick = async () => {
+    if (await chooseBackupTarget()) {
+      renderSettingsPage(el);
+      toast('Speicherort festgelegt ✓ – ab jetzt genügt ein Klick auf 💾', 'success');
+    }
+  };
+  const clearBtn = el.querySelector('#set-backup-clear');
+  if (clearBtn) clearBtn.onclick = () => {
+    state.settings.backupPath = '';
+    saveState();
+    clearBackupDirHandle();
+    renderSettingsPage(el);
+    toast('Speicherort entfernt', 'success');
+  };
   el.querySelector('#set-export').onclick = () => { exportBackup(); toast('Sicherung heruntergeladen ✓', 'success'); };
   el.querySelector('#set-import-file').onchange = (e) => {
     const file = e.target.files[0];
@@ -346,6 +371,126 @@ function renderSettingsPage(el) {
       location.reload();
     });
   };
+}
+
+/* ============================================================
+   SCHNELLSICHERUNG (💾-Knopf oben)
+   - Windows-Programm: schreibt direkt in den gewählten Ordner
+   - Chrome/Edge im Browser: über die Ordner-Freigabe
+   - sonst: normaler Download als Ersatz
+   Die manuelle Sicherung in den Einstellungen bleibt unberührt.
+   ============================================================ */
+
+const BACKUP_FILENAME = 'Arbeitsplaner-Sicherung.json';
+
+function backupJSON() {
+  return JSON.stringify(state, null, 2);
+}
+
+async function quickBackup() {
+  // 1) Desktop-App (Electron): direkt auf die Festplatte schreiben
+  if (window.desktop) {
+    let folder = state.settings.backupPath;
+    if (!folder) {
+      folder = await window.desktop.chooseBackupFolder();
+      if (!folder) { toast('Kein Ordner gewählt – Sicherung abgebrochen', 'warn'); return; }
+      state.settings.backupPath = folder;
+      saveState();
+      if (currentPage === 'einstellungen') renderSettingsPage(document.getElementById('page-wrap'));
+    }
+    const res = await window.desktop.writeBackup(folder, BACKUP_FILENAME, backupJSON());
+    if (res && res.ok) toast('💾 Sicherung gespeichert: ' + res.path, 'success');
+    else toast('Sicherung fehlgeschlagen: ' + ((res && res.error) || 'unbekannter Fehler'), 'error');
+    return;
+  }
+
+  // 2) Browser mit Ordner-Freigabe (Chrome/Edge)
+  if ('showDirectoryPicker' in window) {
+    try {
+      let dir = await loadBackupDirHandle();
+      if (dir) {
+        let perm = await dir.queryPermission({ mode: 'readwrite' });
+        if (perm !== 'granted') perm = await dir.requestPermission({ mode: 'readwrite' });
+        if (perm !== 'granted') dir = null;
+      }
+      if (!dir) {
+        dir = await window.showDirectoryPicker({ mode: 'readwrite' });
+        await storeBackupDirHandle(dir);
+        state.settings.backupPath = 'Ordner „' + dir.name + '"';
+        saveState();
+        if (currentPage === 'einstellungen') renderSettingsPage(document.getElementById('page-wrap'));
+      }
+      const fh = await dir.getFileHandle(BACKUP_FILENAME, { create: true });
+      const w = await fh.createWritable();
+      await w.write(backupJSON());
+      await w.close();
+      toast('💾 Sicherung gespeichert im Ordner „' + dir.name + '" ✓', 'success');
+    } catch (e) {
+      if (e && e.name !== 'AbortError') toast('Sicherung fehlgeschlagen: ' + e.message, 'error');
+    }
+    return;
+  }
+
+  // 3) Ersatz: normaler Download
+  exportBackup();
+  toast('💾 Sicherung als Download gespeichert (Download-Ordner)', 'success');
+}
+
+/* Ordner-Zugriff des Browsers dauerhaft merken (IndexedDB) */
+function backupDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('arbeitsplaner-handles', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('handles');
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function storeBackupDirHandle(handle) {
+  const db = await backupDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('handles', 'readwrite');
+    tx.objectStore('handles').put(handle, 'backupDir');
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function loadBackupDirHandle() {
+  try {
+    const db = await backupDB();
+    return await new Promise((resolve, reject) => {
+      const rq = db.transaction('handles').objectStore('handles').get('backupDir');
+      rq.onsuccess = () => resolve(rq.result || null);
+      rq.onerror = () => reject(rq.error);
+    });
+  } catch (e) { return null; }
+}
+async function clearBackupDirHandle() {
+  try {
+    const db = await backupDB();
+    db.transaction('handles', 'readwrite').objectStore('handles').delete('backupDir');
+  } catch (e) { /* ignorieren */ }
+}
+
+/* Ordner für die Schnellsicherung wählen (aus den Einstellungen) */
+async function chooseBackupTarget() {
+  if (window.desktop) {
+    const folder = await window.desktop.chooseBackupFolder();
+    if (!folder) return false;
+    state.settings.backupPath = folder;
+    saveState();
+    return true;
+  }
+  if ('showDirectoryPicker' in window) {
+    try {
+      const dir = await window.showDirectoryPicker({ mode: 'readwrite' });
+      await storeBackupDirHandle(dir);
+      state.settings.backupPath = 'Ordner „' + dir.name + '"';
+      saveState();
+      return true;
+    } catch (e) { return false; }
+  }
+  toast('In diesem Browser nicht verfügbar – der 💾-Knopf lädt die Sicherung stattdessen als Datei herunter.', 'warn');
+  return false;
 }
 
 /* ---------- Theme ---------- */
@@ -373,6 +518,13 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('sidebar').classList.remove('open');
     document.getElementById('sidebar-backdrop').classList.remove('show');
   };
+  document.getElementById('backup-btn').onclick = () => quickBackup();
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      quickBackup();
+    }
+  });
   document.getElementById('modal-close').onclick = closeModal;
   document.getElementById('modal').addEventListener('click', (e) => {
     if (e.target.id === 'modal') closeModal();

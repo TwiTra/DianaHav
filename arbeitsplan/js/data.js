@@ -26,6 +26,7 @@ const DEFAULT_STATE = () => ({
     theme: 'light',
     firma: '',
     bundesland: 'NW',
+    backupPath: '',      // Ordner für die Schnellsicherung (💾)
   },
   persons: [],          // {id, name, color, hoursPerWeek, vacationDays, note, active}
   shiftTypes: JSON.parse(JSON.stringify(DEFAULT_SHIFTS)),

@@ -121,6 +121,13 @@ body{
   display:none;background:none;border:none;font-size:1.3rem;color:var(--text);cursor:pointer;
 }
 .topbar-breadcrumb{font-weight:600;font-size:.95rem}
+.topbar-actions{margin-left:auto;display:flex;align-items:center;gap:6px}
+.topbar-save{
+  font-size:1.25rem;padding:6px 10px;
+  border:1px solid var(--border);border-radius:9px;
+  background:var(--surface2);
+}
+.topbar-save:hover{border-color:var(--primary);background:var(--surface2)}
 
 .page-wrap{padding:22px}
 
