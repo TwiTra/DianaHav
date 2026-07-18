@@ -31,6 +31,7 @@ const DEFAULT_STATE = () => ({
   shiftTypes: JSON.parse(JSON.stringify(DEFAULT_SHIFTS)),
   schedule: {},         // { 'YYYY-MM-DD': { personId: shiftId } }
   dayNotes: {},         // { 'YYYY-MM-DD': 'text' }  (Notiz im Arbeitsplan)
+  planNotes: {},        // { 'YYYY-MM': [ {id, text} ] }  (Notizen unter dem Plan)
   calendar: [],         // {id, date, type:'termin'|'aufgabe'|'notiz', title, time, endTime, desc, done}
   vacations: [],        // {id, personId, from, to, note, status:'geplant'|'genehmigt'}
 });
@@ -92,6 +93,14 @@ function setShift(dateISO, personId, shiftId) {
     if (Object.keys(state.schedule[dateISO]).length === 0) delete state.schedule[dateISO];
   }
   saveState();
+}
+
+/* Notizen-Liste eines Monats (legt sie bei Bedarf an) */
+function planNotesFor(year, month) {
+  const key = year + '-' + String(month + 1).padStart(2, '0');
+  if (!state.planNotes) state.planNotes = {};
+  if (!state.planNotes[key]) state.planNotes[key] = [];
+  return state.planNotes[key];
 }
 
 /* Dauer einer Schicht in Stunden (abzüglich Pause) */

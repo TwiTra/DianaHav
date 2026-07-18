@@ -494,6 +494,27 @@ thead .plan-ft{background:color-mix(in srgb, #e34948 18%, var(--surface2))}
 .xls-table .plan-today{outline:2px solid #2f6f8f;outline-offset:-2px}
 .xls-table .plan-conflict{outline:2px solid #eda100;outline-offset:-2px}
 
+/* Notizen unter dem Plan */
+.notes-card{padding:14px 16px}
+.notes-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:9px}
+.notes-title{font-size:.92rem;font-weight:700}
+.note-item{
+  display:flex;align-items:flex-start;gap:10px;
+  background:var(--surface2);border:1px solid var(--border);
+  border-radius:9px;padding:8px 11px;margin-bottom:6px;
+}
+.note-bullet{width:8px;height:8px;border-radius:50%;background:var(--primary);margin-top:7px;flex-shrink:0}
+.note-text{
+  flex:1;min-height:20px;font-size:.86rem;line-height:1.5;
+  outline:none;border-radius:5px;padding:0 3px;
+  white-space:pre-wrap;word-break:break-word;
+}
+.note-text:empty::before{content:'Notiz eingeben…';color:var(--text3)}
+.note-text:focus{box-shadow:0 0 0 2px var(--primary);background:var(--surface)}
+.note-item .note-del{opacity:.4;flex-shrink:0}
+.note-item:hover .note-del{opacity:1}
+.note-empty{padding:2px}
+
 .export-bar{
   display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 14px;
 }

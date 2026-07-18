@@ -38,6 +38,9 @@ function renderPlanPage(el) {
   else if (design === 'excel') planBody = planScreenExcel(year, month, persons);
   else                         planBody = planScreenClassic(year, month, persons);
 
+  // Notizen unter dem Plan (wie in der Vorlage) – im Wochen- und Klassisch-Design
+  const notesCard = design === 'excel' ? '' : planNotesCard(year, month);
+
   el.innerHTML = `
     <div class="page-head">
       <div>
@@ -62,6 +65,8 @@ function renderPlanPage(el) {
     </div>
 
     ${planBody}
+
+    ${notesCard}
 
     <div class="card export-bar">
       <span class="export-label">Exportieren &amp; Drucken (im gewählten Design):</span>
@@ -100,6 +105,7 @@ function renderPlanPage(el) {
   });
 
   bindPlanCells(el);
+  if (notesCard) bindPlanNotes(el, year, month);
 
   // Export
   el.querySelector('#exp-print').onclick = () => printPlan(year, month);
@@ -119,6 +125,59 @@ function renderPlanPage(el) {
       toast('Monat geleert', 'success');
     });
   };
+}
+
+/* ============================================================
+   NOTIZEN unter dem Plan (pro Monat, wie in der Vorlage)
+   ============================================================ */
+
+function planNotesCard(year, month) {
+  const notes = planNotesFor(year, month);
+  const rows = notes.map(n => `
+    <div class="note-item" data-id="${n.id}">
+      <span class="note-bullet"></span>
+      <div class="note-text" contenteditable="true">${esc(n.text)}</div>
+      <button class="icon-btn note-del" title="Notiz löschen">🗑️</button>
+    </div>`).join('');
+  return `<div class="card notes-card">
+    <div class="notes-head">
+      <span class="notes-title">📝 Notizen zum Plan – ${MONTHS[month]} ${year}</span>
+      <button class="btn btn-sm" id="note-add">+ Notiz hinzufügen</button>
+    </div>
+    <div id="note-list">${rows || '<p class="muted note-empty">Noch keine Notizen. Beispiele: „Krankmeldungen bitte bis 8:00 Uhr melden.", „Schichttausch nur nach Absprache."</p>'}</div>
+  </div>`;
+}
+
+function bindPlanNotes(el, year, month) {
+  const notes = planNotesFor(year, month);
+
+  el.querySelector('#note-add').onclick = () => {
+    notes.push({ id: uid(), text: '' });
+    saveState();
+    renderPlanPage(el);
+    const fields = el.querySelectorAll('.note-text');
+    if (fields.length) fields[fields.length - 1].focus();
+  };
+
+  el.querySelectorAll('.note-item').forEach(item => {
+    const note = notes.find(n => n.id === item.dataset.id);
+    if (!note) return;
+    const field = item.querySelector('.note-text');
+    field.onblur = () => {
+      const text = field.innerText.replace(/\s+$/g, '');
+      if (text !== note.text) {
+        note.text = text;
+        saveState();
+      }
+    };
+    item.querySelector('.note-del').onclick = () => {
+      const idx = notes.findIndex(n => n.id === note.id);
+      if (idx >= 0) notes.splice(idx, 1);
+      saveState();
+      renderPlanPage(el);
+      toast('Notiz gelöscht', 'success');
+    };
+  });
 }
 
 /* Klick-/Rechtsklick-Verhalten – für alle Designs identisch */

@@ -178,11 +178,23 @@ function buildLegendInlineHTML(fontFamily) {
   return html;
 }
 
+/* Notizen des Monats für Export/Druck (Wochen- und Klassisch-Design) */
+function buildNotesExportHTML(year, month, fontFamily) {
+  const key = year + '-' + String(month + 1).padStart(2, '0');
+  const notes = ((state.planNotes && state.planNotes[key]) || []).filter(n => n.text && n.text.trim());
+  if (!notes.length) return '';
+  return `<div style="font-family:${fontFamily};margin-top:10px;border-top:1px solid #d8dde4;padding-top:7px">` +
+    `<span style="font-size:7.5pt;font-weight:700;letter-spacing:2px;color:#5b6b7b">NOTIZEN</span>` +
+    notes.map(n => `<div style="font-size:8.5pt;margin-top:3px;color:#34424e">&#8226; ${esc(n.text)}</div>`).join('') +
+    '</div>';
+}
+
 /* ---------- Design „Klassisch": Monat kompakt ---------- */
 
 function buildClassicExportHTML(year, month) {
   return `<h2 style="font-family:Arial,sans-serif;margin:0 0 8px">${esc(planTitle(year, month))}</h2>` +
-    buildPlanTableHTML(year, month);
+    buildPlanTableHTML(year, month) +
+    buildNotesExportHTML(year, month, 'Arial,sans-serif');
 }
 
 function buildPlanTableHTML(year, month) {
@@ -307,6 +319,7 @@ function buildWochenExportHTML(year, month) {
         (s.start ? `<b>${esc(shiftPillLabel(s))}</b> ${esc(s.label)}` : `<b>${esc(s.label)}</b>`) + `</span>`;
     }).join('') + '</div>';
 
+  h += buildNotesExportHTML(year, month, F);
   h += '</div>';
   return h;
 }
