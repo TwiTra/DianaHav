@@ -46,10 +46,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete windows-exe --yes || true
-          git push origin :refs/tags/windows-exe || true
-          gh release create windows-exe \
-            --title "Arbeitsplaner für Windows" \
+          # Alte Build-Releases entfernen (Tags sind unveränderlich und werden
+          # nie wiederverwendet – jeder Build bekommt einen eindeutigen Tag)
+          for t in $(gh release list --limit 100 --json tagName -q '.[].tagName'); do
+            gh release delete "$t" --yes || true
+          done
+          gh release create "build-${{ github.run_number }}" \
+            --target "${{ github.sha }}" \
+            --title "Arbeitsplaner für Windows (Build ${{ github.run_number }})" \
             --notes "Neueste Version des Arbeitsplaners als Windows-Programm.
 
           **Download:**
