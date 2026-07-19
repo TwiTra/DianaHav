@@ -1,0 +1,45 @@
+{
+  "name": "arbeitsplaner",
+  "productName": "Arbeitsplaner",
+  "version": "1.0.0",
+  "description": "Arbeitspläne, Monatskalender, Urlaubsplanung und Statistik – als Desktop-Programm",
+  "author": "TwiTra",
+  "license": "MIT",
+  "main": "main.js",
+  "scripts": {
+    "prepare-renderer": "node copy-renderer.js",
+    "start": "npm run prepare-renderer && electron .",
+    "dist": "npm run prepare-renderer && electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "de.twitra.arbeitsplaner",
+    "productName": "Arbeitsplaner",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "icon.ico",
+      "renderer/**"
+    ],
+    "win": {
+      "target": ["nsis", "portable"],
+      "icon": "icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "Arbeitsplaner-Setup-${version}.exe",
+      "shortcutName": "Arbeitsplaner"
+    },
+    "portable": {
+      "artifactName": "Arbeitsplaner-Portable-${version}.exe"
+    }
+  }
+}
