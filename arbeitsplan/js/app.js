@@ -676,9 +676,31 @@ async function viewerRefresh(gistId, first) {
   return true;
 }
 
+/* Zoom in der Nur-Lese-Ansicht (bessere Übersicht auf Handy/Tablet) */
+let viewerZoomFactor = 1;
+
+function viewerSetZoom(f) {
+  viewerZoomFactor = Math.min(2, Math.max(0.5, Math.round(f * 10) / 10));
+  document.getElementById('page-wrap').style.zoom = viewerZoomFactor;
+  const label = document.getElementById('zoom-label');
+  if (label) label.textContent = Math.round(viewerZoomFactor * 100) + '%';
+}
+
 async function initViewer(gistId) {
   window.VIEW_ONLY = true;
   document.body.classList.add('view-only');
+
+  const zoom = document.createElement('div');
+  zoom.className = 'zoom-controls';
+  zoom.innerHTML =
+    '<button id="zoom-out" title="Verkleinern">−</button>' +
+    '<button id="zoom-label" title="Auf 100 % zurücksetzen">100%</button>' +
+    '<button id="zoom-in" title="Vergrößern">+</button>';
+  document.querySelector('.topbar').appendChild(zoom);
+  zoom.querySelector('#zoom-out').onclick = () => viewerSetZoom(viewerZoomFactor - 0.1);
+  zoom.querySelector('#zoom-in').onclick = () => viewerSetZoom(viewerZoomFactor + 0.1);
+  zoom.querySelector('#zoom-label').onclick = () => viewerSetZoom(1);
+
   const banner = document.createElement('div');
   banner.className = 'view-banner';
   banner.innerHTML = '👁️ Nur-Ansicht &middot; Stand: <b id="view-stand">wird geladen…</b> &middot; aktualisiert sich automatisch';
