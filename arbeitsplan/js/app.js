@@ -18,7 +18,8 @@ const PAGES = {
 
 function navigate() {
   const hash = location.hash.replace('#/', '') || 'kalender';
-  const page = PAGES[hash] ? hash : 'kalender';
+  let page = PAGES[hash] ? hash : 'kalender';
+  if (window.VIEW_ONLY && ['personen', 'schichten', 'einstellungen'].includes(page)) page = 'kalender';
   currentPage = page;
   document.querySelectorAll('.nav-link').forEach(a =>
     a.classList.toggle('active', a.dataset.page === page));
@@ -325,6 +326,36 @@ function renderSettingsPage(el) {
     </div>
 
     <div class="card">
+      <h3 class="card-title">Online-Freigabe für Mitarbeiter (nur Lesen)</h3>
+      <p class="muted" style="margin-bottom:12px">
+        Teile deinen Plan über einen Link: Mitarbeiter sehen ihn im Browser, können nichts verändern,
+        und die Ansicht aktualisiert sich automatisch, sobald du speicherst (💾).
+        Dafür wird ein kostenloses GitHub-Konto mit einem Zugriffsschlüssel benötigt:
+        <a href="https://github.com/settings/tokens/new?scopes=gist&description=Arbeitsplaner" target="_blank" rel="noopener">github.com → Token erstellen</a>
+        (Haken bei <b>„gist"</b> genügt), den Schlüssel unten einfügen.
+      </p>
+      <div class="form-row"><label>GitHub-Zugriffsschlüssel (Token mit Berechtigung „gist")</label>
+        <input type="password" id="set-share-token" value="${esc(state.settings.shareToken || '')}" placeholder="ghp_…" autocomplete="off">
+      </div>
+      <div class="form-row"><label class="check-label">
+        <input type="checkbox" id="set-share-auto" ${state.settings.shareAuto !== false ? 'checked' : ''}>
+        Beim Speichern (💾 / Strg+S) automatisch aktualisieren
+      </label></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="set-share-publish">🌐 ${state.settings.shareGistId ? 'Jetzt aktualisieren' : 'Freigabe-Link erstellen'}</button>
+        ${state.settings.shareGistId ? '<button class="btn btn-danger-ghost" id="set-share-off">Freigabe beenden</button>' : ''}
+      </div>
+      ${state.settings.shareGistId ? `
+      <div class="form-row" style="margin-top:12px"><label>Link für deine Mitarbeiter</label>
+        <div class="btn-row">
+          <input type="text" id="set-share-link" value="${esc(shareViewerLink())}" readonly style="flex:1;min-width:220px">
+          <button class="btn" id="set-share-copy">📋 Kopieren</button>
+        </div>
+        <p class="muted" style="margin-top:6px">Wer den Link hat, kann den Plan sehen (nicht ändern). Zum Widerrufen „Freigabe beenden" klicken.</p>
+      </div>` : ''}
+    </div>
+
+    <div class="card">
       <h3 class="card-title">Gefahrenzone</h3>
       <button class="btn btn-danger-ghost" id="set-reset">Alle Daten löschen und neu starten</button>
     </div>
@@ -352,6 +383,37 @@ function renderSettingsPage(el) {
     clearBackupDirHandle();
     renderSettingsPage(el);
     toast('Speicherort entfernt', 'success');
+  };
+  el.querySelector('#set-share-token').onchange = (e) => {
+    state.settings.shareToken = e.target.value.trim();
+    saveState();
+  };
+  el.querySelector('#set-share-auto').onchange = (e) => {
+    state.settings.shareAuto = e.target.checked;
+    saveState();
+  };
+  el.querySelector('#set-share-publish').onclick = async () => {
+    state.settings.shareToken = el.querySelector('#set-share-token').value.trim();
+    saveState();
+    if (await sharePublish(false)) renderSettingsPage(el);
+  };
+  const shareOff = el.querySelector('#set-share-off');
+  if (shareOff) shareOff.onclick = () => {
+    confirmDialog('Freigabe beenden? Der Link funktioniert danach nicht mehr.', async () => {
+      await shareDisable();
+      renderSettingsPage(el);
+      toast('Freigabe beendet – der Link ist deaktiviert', 'success');
+    });
+  };
+  const shareCopy = el.querySelector('#set-share-copy');
+  if (shareCopy) shareCopy.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(shareViewerLink());
+      toast('Link kopiert ✓ – einfach an die Mitarbeiter schicken', 'success');
+    } catch (e) {
+      el.querySelector('#set-share-link').select();
+      toast('Bitte den markierten Link mit Strg+C kopieren', 'warn');
+    }
   };
   el.querySelector('#set-export').onclick = () => { exportBackup(); toast('Sicherung heruntergeladen ✓', 'success'); };
   el.querySelector('#set-import-file').onchange = (e) => {
@@ -401,6 +463,7 @@ async function quickBackup() {
     const res = await window.desktop.writeBackup(folder, BACKUP_FILENAME, backupJSON());
     if (res && res.ok) toast('💾 Sicherung gespeichert: ' + res.path, 'success');
     else toast('Sicherung fehlgeschlagen: ' + ((res && res.error) || 'unbekannter Fehler'), 'error');
+    maybeSharePublish();
     return;
   }
 
@@ -425,6 +488,7 @@ async function quickBackup() {
       await w.write(backupJSON());
       await w.close();
       toast('💾 Sicherung gespeichert im Ordner „' + dir.name + '" ✓', 'success');
+      maybeSharePublish();
     } catch (e) {
       if (e && e.name !== 'AbortError') toast('Sicherung fehlgeschlagen: ' + e.message, 'error');
     }
@@ -434,6 +498,7 @@ async function quickBackup() {
   // 3) Ersatz: normaler Download
   exportBackup();
   toast('💾 Sicherung als Download gespeichert (Download-Ordner)', 'success');
+  maybeSharePublish();
 }
 
 /* Ordner-Zugriff des Browsers dauerhaft merken (IndexedDB) */
@@ -469,6 +534,160 @@ async function clearBackupDirHandle() {
     const db = await backupDB();
     db.transaction('handles', 'readwrite').objectStore('handles').delete('backupDir');
   } catch (e) { /* ignorieren */ }
+}
+
+/* ============================================================
+   ONLINE-FREIGABE (nur Lesen) über GitHub Gist
+   Der Chef veröffentlicht den Plan; Mitarbeiter öffnen einen
+   Nur-Lese-Link, der sich automatisch aktualisiert.
+   ============================================================ */
+
+const SHARE_FILENAME = 'arbeitsplan-daten.json';
+const SHARE_VIEWER_BASE = 'https://twitra.github.io/DianaHav/arbeitsplan/';
+
+function shareViewerLink() {
+  return SHARE_VIEWER_BASE + '?ansicht=' + state.settings.shareGistId;
+}
+
+/* Zu veröffentlichende Daten – ohne Token und ohne lokale Pfade */
+function sharePayload() {
+  return JSON.stringify({
+    settings: {
+      firma: state.settings.firma,
+      bundesland: state.settings.bundesland,
+      planDesign: state.settings.planDesign,
+      theme: 'light',
+    },
+    persons: state.persons,
+    shiftTypes: state.shiftTypes,
+    schedule: state.schedule,
+    dayNotes: state.dayNotes,
+    planNotes: state.planNotes,
+    calendar: state.calendar,
+    vacations: state.vacations,
+    veroeffentlicht: new Date().toISOString(),
+  });
+}
+
+function shareHeaders(token) {
+  return {
+    'Authorization': 'Bearer ' + token,
+    'Accept': 'application/vnd.github+json',
+    'Content-Type': 'application/json',
+  };
+}
+
+async function sharePublish(silent) {
+  const token = state.settings.shareToken;
+  if (!token) {
+    if (!silent) toast('Bitte zuerst in den Einstellungen ein GitHub-Token hinterlegen', 'warn');
+    return false;
+  }
+  const body = {
+    description: 'Arbeitsplaner – Freigabe für Mitarbeiter (nur Lesen)',
+    files: { [SHARE_FILENAME]: { content: sharePayload() } },
+  };
+  try {
+    let res;
+    if (state.settings.shareGistId) {
+      res = await fetch('https://api.github.com/gists/' + state.settings.shareGistId, {
+        method: 'PATCH', headers: shareHeaders(token), body: JSON.stringify(body),
+      });
+      if (res.status === 404) { // Gist wurde gelöscht → neu anlegen
+        state.settings.shareGistId = '';
+        saveState();
+        return sharePublish(silent);
+      }
+    } else {
+      body.public = false; // geheimer Gist: nur über den Link erreichbar
+      res = await fetch('https://api.github.com/gists', {
+        method: 'POST', headers: shareHeaders(token), body: JSON.stringify(body),
+      });
+    }
+    if (!res.ok) throw new Error('GitHub antwortete mit Status ' + res.status);
+    const data = await res.json();
+    state.settings.shareGistId = data.id;
+    saveState();
+    if (!silent) toast('🌐 Freigabe aktualisiert ✓', 'success');
+    return true;
+  } catch (e) {
+    toast('Online-Freigabe fehlgeschlagen: ' + e.message, 'error');
+    return false;
+  }
+}
+
+/* Nach dem Speichern (💾) automatisch veröffentlichen, falls eingerichtet */
+function maybeSharePublish() {
+  if (state.settings.shareAuto && state.settings.shareGistId && state.settings.shareToken) {
+    sharePublish(true);
+  }
+}
+
+async function shareDisable() {
+  const token = state.settings.shareToken;
+  const id = state.settings.shareGistId;
+  if (token && id) {
+    try {
+      await fetch('https://api.github.com/gists/' + id, { method: 'DELETE', headers: shareHeaders(token) });
+    } catch (e) { /* Link wird lokal trotzdem getrennt */ }
+  }
+  state.settings.shareGistId = '';
+  saveState();
+}
+
+/* ============================================================
+   NUR-LESE-ANSICHT für Mitarbeiter (?ansicht=<id>)
+   ============================================================ */
+
+let viewerStand = '';
+
+async function viewerRefresh(gistId, first) {
+  const res = await fetch('https://api.github.com/gists/' + gistId, {
+    headers: { 'Accept': 'application/vnd.github+json' },
+  });
+  if (!res.ok) throw new Error('Plan nicht erreichbar (Status ' + res.status + ')');
+  const g = await res.json();
+  const f = g.files && g.files[SHARE_FILENAME];
+  if (!f) throw new Error('Keine Plandaten in der Freigabe gefunden');
+  let content = f.content;
+  if (f.truncated) content = await (await fetch(f.raw_url)).text();
+  const data = JSON.parse(content);
+  if (!first && data.veroeffentlicht === viewerStand) return false;
+  viewerStand = data.veroeffentlicht || '';
+
+  const def = DEFAULT_STATE();
+  state = Object.assign(def, data);
+  state.settings = Object.assign(DEFAULT_STATE().settings, data.settings || {});
+
+  const stand = viewerStand ? new Date(viewerStand) : new Date();
+  const el = document.getElementById('view-stand');
+  if (el) el.textContent = stand.toLocaleDateString('de-DE') + ', ' + stand.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr';
+
+  applyTheme();
+  updateBadges();
+  PAGES[currentPage].render(document.getElementById('page-wrap'));
+  if (!first) toast('Der Plan wurde aktualisiert ✓', 'success');
+  return true;
+}
+
+async function initViewer(gistId) {
+  window.VIEW_ONLY = true;
+  document.body.classList.add('view-only');
+  const banner = document.createElement('div');
+  banner.className = 'view-banner';
+  banner.innerHTML = '👁️ Nur-Ansicht &middot; Stand: <b id="view-stand">wird geladen…</b> &middot; aktualisiert sich automatisch';
+  document.querySelector('.topbar').appendChild(banner);
+  try {
+    await viewerRefresh(gistId, true);
+  } catch (e) {
+    document.getElementById('page-wrap').innerHTML =
+      `<div class="card empty-state"><div class="empty-icon">📡</div>
+       <h2>Plan konnte nicht geladen werden</h2>
+       <p>${esc(e.message)}. Bitte prüfe den Link oder versuche es später erneut.</p></div>`;
+    return;
+  }
+  setInterval(() => viewerRefresh(gistId).catch(() => {}), 180000); // alle 3 Minuten
+  window.addEventListener('focus', () => viewerRefresh(gistId).catch(() => {}));
 }
 
 /* Ordner für die Schnellsicherung wählen (aus den Einstellungen) */
@@ -522,7 +741,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
       e.preventDefault();
-      quickBackup();
+      if (!window.VIEW_ONLY) quickBackup();
     }
   });
   document.getElementById('modal-close').onclick = closeModal;
@@ -533,5 +752,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Escape') closeModal();
   });
   window.addEventListener('hashchange', navigate);
-  navigate();
+  const ansicht = new URLSearchParams(location.search).get('ansicht');
+  if (ansicht) {
+    initViewer(ansicht).then(() => navigate());
+  } else {
+    navigate();
+  }
 });

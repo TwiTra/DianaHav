@@ -182,6 +182,7 @@ function bindPlanNotes(el, year, month) {
 
 /* Klick-/Rechtsklick-Verhalten – für alle Designs identisch */
 function bindPlanCells(el) {
+  if (window.VIEW_ONLY) return; // Nur-Lese-Ansicht: keine Bearbeitung
   el.querySelectorAll('.plan-cell[data-date]').forEach(cell => {
     cell.onclick = () => {
       const { date, person } = cell.dataset;

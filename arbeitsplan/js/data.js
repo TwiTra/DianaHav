@@ -27,6 +27,9 @@ const DEFAULT_STATE = () => ({
     firma: '',
     bundesland: 'NW',
     backupPath: '',      // Ordner für die Schnellsicherung (💾)
+    shareToken: '',      // GitHub-Token für die Online-Freigabe
+    shareGistId: '',     // Gist-ID der veröffentlichten Freigabe
+    shareAuto: true,     // beim Speichern (💾) automatisch aktualisieren
   },
   persons: [],          // {id, name, color, hoursPerWeek, vacationDays, note, active}
   shiftTypes: JSON.parse(JSON.stringify(DEFAULT_SHIFTS)),
@@ -56,6 +59,7 @@ function loadState() {
 }
 
 function saveState() {
+  if (window.VIEW_ONLY) return; // Nur-Lese-Ansicht verändert nichts
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (e) {

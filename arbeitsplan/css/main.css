@@ -656,6 +656,41 @@ thead .plan-ft{background:color-mix(in srgb, #e34948 18%, var(--surface2))}
   .form-row-2,.form-row-3{grid-template-columns:1fr}
 }
 
+/* ============ NUR-LESE-ANSICHT (Mitarbeiter-Link) ============ */
+.view-banner{
+  margin-left:auto;
+  background:color-mix(in srgb, var(--primary) 12%, var(--surface2));
+  border:1px solid color-mix(in srgb, var(--primary) 40%, transparent);
+  color:var(--text);
+  border-radius:20px;
+  padding:4px 14px;
+  font-size:.78rem;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+body.view-only .topbar-actions,
+body.view-only .brush-bar,
+body.view-only #plan-copy,
+body.view-only #plan-clear,
+body.view-only #note-add,
+body.view-only .note-del,
+body.view-only #cal-add,
+body.view-only #day-add,
+body.view-only .entry-edit,
+body.view-only .entry-del,
+body.view-only #vac-new,
+body.view-only .vac-add,
+body.view-only .vac-edit,
+body.view-only .vac-del,
+body.view-only .vac-to-plan,
+body.view-only .sidebar-nav .nav-group:last-child{display:none !important}
+body.view-only .plan-cell,
+body.view-only .w-cell,
+body.view-only .xls-cell{cursor:default}
+body.view-only .plan-cell:hover{box-shadow:none !important;background:inherit !important}
+body.view-only .note-text{pointer-events:none}
+body.view-only .entry-check{pointer-events:none}
+body.view-only .page-sub{visibility:hidden;height:0}
+
 /* ============ DRUCK (A4 quer) ============ */
 #print-area{display:none}
 @media print {
