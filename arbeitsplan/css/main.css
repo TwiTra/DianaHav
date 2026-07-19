@@ -574,6 +574,11 @@ thead .plan-ft{background:color-mix(in srgb, #e34948 18%, var(--surface2))}
 .vac-days{color:var(--text2);white-space:nowrap}
 
 /* ============ STATISTIK ============ */
+.stats-empty-hint{
+  background:color-mix(in srgb, var(--warn) 10%, var(--surface));
+  border-color:color-mix(in srgb, var(--warn) 45%, transparent);
+  font-size:.9rem;line-height:1.6;
+}
 .stats-2col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media (max-width:1100px){.stats-2col{grid-template-columns:1fr}}
 .stats-table{border-collapse:collapse;width:100%;font-size:.82rem}
@@ -644,7 +649,36 @@ thead .plan-ft{background:color-mix(in srgb, #e34948 18%, var(--surface2))}
 .toast-error{border-left-color:var(--danger)}
 .toast-warn{border-left-color:var(--warn)}
 
+/* Soll-/Ist-Stunden */
+.si-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+.si-name{display:inline-flex;align-items:center;min-width:130px;font-size:.84rem;font-weight:600}
+.si-track{position:relative;flex:1;min-width:120px}
+.si-soll-mark{
+  position:absolute;top:-2px;bottom:-2px;width:2px;
+  background:var(--text2);border-radius:1px;
+}
+.si-nums{font-size:.78rem;color:var(--text2);white-space:nowrap;font-variant-numeric:tabular-nums}
+.si-plus{color:var(--success)}
+.si-minus{color:var(--danger)}
+
+/* Zoom-Knöpfe (Nur-Lese-Ansicht) */
+.zoom-controls{
+  margin-left:auto;display:flex;align-items:center;
+  border:1px solid var(--border);border-radius:9px;overflow:hidden;
+  background:var(--surface2);flex-shrink:0;
+}
+.zoom-controls button{
+  border:none;background:none;cursor:pointer;color:var(--text);
+  font-family:var(--font);font-size:.95rem;font-weight:700;
+  padding:6px 11px;line-height:1;
+}
+.zoom-controls button:hover{background:var(--surface)}
+.zoom-controls #zoom-label{font-size:.72rem;font-weight:600;color:var(--text2);border-left:1px solid var(--border);border-right:1px solid var(--border)}
+.view-banner{margin-left:8px}
+body.view-only .zoom-controls{margin-left:auto}
+
 /* ============ RESPONSIVE ============ */
+.plan-scroll{-webkit-overflow-scrolling:touch}
 @media (max-width:900px){
   .sidebar{transform:translateX(-100%)}
   .sidebar.open{transform:none}
@@ -654,6 +688,35 @@ thead .plan-ft{background:color-mix(in srgb, #e34948 18%, var(--surface2))}
   .cal-cell{min-height:72px}
   .picker-grid{grid-template-columns:1fr}
   .form-row-2,.form-row-3{grid-template-columns:1fr}
+}
+/* Smartphone: kompaktes Layout für die Mitarbeiter-Ansicht & unterwegs */
+@media (max-width:640px){
+  .page-wrap{padding:9px}
+  .page-head{margin-bottom:10px;gap:8px}
+  .page-head h1{font-size:1.12rem}
+  .page-sub{font-size:.76rem}
+  .btn{padding:7px 10px;font-size:.78rem}
+  .btn-row{gap:6px}
+  .card{padding:12px;border-radius:12px;margin-bottom:10px}
+  .topbar{padding:0 10px;gap:8px}
+  .topbar-breadcrumb{font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .view-banner{font-size:.6rem;padding:3px 8px;margin-left:4px}
+  .zoom-controls button{padding:6px 9px}
+  .brush .brush-label{display:none}
+  .brush-bar,.export-bar{padding:9px 10px;gap:5px}
+  .design-select{min-width:0;flex:1 1 100%}
+  .cal-weekdays{font-size:.6rem}
+  .cal-cell{min-height:52px;padding:3px;border-radius:6px}
+  .cal-daynum{font-size:.68rem}
+  .cal-chip{font-size:.56rem;padding:0 3px;border-left-width:2px}
+  .stats-table{font-size:.72rem}
+  .stats-table th,.stats-table td{padding:4px 5px}
+  .si-name{min-width:100px;font-size:.78rem}
+  .modal{padding:16px}
+  .modal-title{font-size:1rem}
+  .wochen-band{padding:10px 14px}
+  .xls-title{font-size:1.2em;padding:.4em .7em}
+  .notes-head{margin-bottom:6px}
 }
 
 /* ============ NUR-LESE-ANSICHT (Mitarbeiter-Link) ============ */

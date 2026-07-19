@@ -32,27 +32,43 @@ function computeStats() {
       workDays: 0,
       weekendShifts: 0,
       holidayShifts: 0,
+      vacationDaysTaken: 0,     // Urlaubstage (U) im Zeitraum
+      sickDays: 0,              // Kranktage (K) im Zeitraum
       freeByWeekday: [0,0,0,0,0,0,0], // Mo..So – explizit »frei« (frei/urlaub/krank zählt getrennt)
       offByWeekday: [0,0,0,0,0,0,0],  // Mo..So – kein Arbeitsdienst (frei, Urlaub, krank oder leer)
+      hoursByMonth: Array(12).fill(0), // Stunden je Monat (für die Jahresansicht)
     };
   }
+  // Besetzung: wie viele Personen arbeiten im Schnitt an welchem Wochentag?
+  const staffingSum = [0,0,0,0,0,0,0];
+  const dayCountByWd = [0,0,0,0,0,0,0];
+
   for (const d of days) {
+    dayCountByWd[d.wd]++;
+    let working = 0;
     for (const p of persons) {
       const st = per[p.id];
       const shift = shiftById(getShift(d.iso, p.id));
       if (shift) st.shiftCounts[shift.id] = (st.shiftCounts[shift.id] || 0) + 1;
       if (shift && shift.kind === 'arbeit') {
+        working++;
         st.workDays++;
-        st.hours += shiftHours(shift);
+        const h = shiftHours(shift);
+        st.hours += h;
+        st.hoursByMonth[Number(d.iso.slice(5, 7)) - 1] += h;
         if (d.weekend) st.weekendShifts++;
         if (d.holiday) st.holidayShifts++;
       } else {
         st.offByWeekday[d.wd]++;
         if (shift && shift.kind === 'frei') st.freeByWeekday[d.wd]++;
+        if (shift && shift.kind === 'urlaub') st.vacationDaysTaken++;
+        if (shift && shift.kind === 'krank') st.sickDays++;
       }
     }
+    staffingSum[d.wd] += working;
   }
-  return { days, persons, per };
+  const staffingAvg = staffingSum.map((s, i) => dayCountByWd[i] ? s / dayCountByWd[i] : 0);
+  return { days, persons, per, staffingAvg };
 }
 
 function renderStatsPage(el) {
@@ -70,10 +86,19 @@ function renderStatsPage(el) {
   }
 
   const { mode, year, month } = statsView;
-  const { per } = computeStats();
+  const { days, per, staffingAvg } = computeStats();
   const workShifts = state.shiftTypes.filter(s => s.kind === 'arbeit');
   const absShifts = state.shiftTypes.filter(s => s.kind !== 'arbeit');
   const periodLabel = mode === 'jahr' ? String(year) : MONTHS[month] + ' ' + year;
+
+  // Hinweis, wenn im gewählten Zeitraum gar nichts eingetragen ist
+  const hasData = persons.some(p => Object.keys(per[p.id].shiftCounts).length > 0);
+  const emptyHint = hasData ? '' : `
+    <div class="card stats-empty-hint">
+      ⚠️ Im Zeitraum <b>${periodLabel}</b> sind keine Schichten eingetragen.
+      Wechsle mit den Pfeilen <b>‹ ›</b> oben rechts zu dem Monat, den du geplant hast –
+      oder stelle auf <b>„Jahr"</b> um, um das ganze Jahr ${year} auszuwerten.
+    </div>`;
 
   /* --- 1. Übersichtstabelle: alle Personen vergleichbar --- */
   let tableHead = '<tr><th class="plan-name-col">Person</th>' +
@@ -132,6 +157,76 @@ function renderStatsPage(el) {
   const shiftLegend = workShifts.map(s =>
     `<span class="legend-item"><span class="legend-dot" style="background:${s.color}"></span>${esc(s.code)} = ${esc(s.label)}</span>`).join('');
 
+  /* --- 4. Soll-/Ist-Stunden --- */
+  const fmtH = h => h.toFixed(1).replace('.', ',');
+  const sollIstRows = persons.map(p => {
+    const st = per[p.id];
+    const soll = (p.hoursPerWeek || 40) * days.length / 7;
+    const diff = st.hours - soll;
+    const pct = soll ? Math.min(130, (st.hours / soll) * 100) : 0;
+    return `<div class="si-row">
+      <span class="si-name"><span class="person-dot" style="background:${p.color}"></span>${esc(p.name)}</span>
+      <div class="bar-track si-track" title="${esc(p.name)}: ${fmtH(st.hours)} von ${fmtH(soll)} Soll-Stunden">
+        <div class="bar-fill" style="width:${(pct / 130) * 100}%;background:#3987e5"></div>
+        <span class="si-soll-mark" style="left:${(100 / 130) * 100}%"></span>
+      </div>
+      <span class="si-nums">${fmtH(st.hours)} / ${fmtH(soll)}
+        <b class="${diff >= 0 ? 'si-plus' : 'si-minus'}">${diff >= 0 ? '+' : '−'}${fmtH(Math.abs(diff))}</b></span>
+    </div>`;
+  }).join('');
+
+  /* --- 5. Besetzung nach Wochentag --- */
+  const maxStaff = Math.max(0.001, ...staffingAvg);
+  const staffingRows = WEEKDAYS_SHORT.map((w, i) => {
+    const v = staffingAvg[i];
+    return `<div class="bar-row" title="${WEEKDAYS[i]}: durchschnittlich ${v.toFixed(1).replace('.', ',')} Personen im Dienst">
+      <span class="bar-label">${w}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${(v / maxStaff) * 100}%;background:#3987e5"></div></div>
+      <span class="bar-value">${v ? v.toFixed(1).replace('.', ',') : ''}</span>
+    </div>`;
+  }).join('');
+
+  /* --- 6. Urlaub & Krank --- */
+  const urlaubRows = persons.map(p => {
+    const st = per[p.id];
+    const anspruch = p.vacationDays || 30;
+    const genommenJahr = mode === 'jahr' ? st.vacationDaysTaken : planVacationDaysInYear(p.id, year);
+    const rest = anspruch - genommenJahr;
+    return `<tr>
+      <td class="plan-name-col"><span class="person-dot" style="background:${p.color}"></span>${esc(p.name)}</td>
+      <td>${st.vacationDaysTaken || '–'}</td>
+      <td>${st.sickDays || '–'}</td>
+      <td>${anspruch}</td>
+      <td class="${rest < 0 ? 'si-minus' : ''}"><b>${rest}</b></td>
+    </tr>`;
+  }).join('');
+
+  /* --- 7. Nur Jahresansicht: Stunden-Heatmap Person × Monat --- */
+  let monthHeat = '';
+  if (mode === 'jahr') {
+    const maxMH = Math.max(1, ...persons.flatMap(p => per[p.id].hoursByMonth));
+    const rows = persons.map(p => {
+      const cells = per[p.id].hoursByMonth.map((h, m) => {
+        const level = h === 0 ? -1 : Math.min(SEQ_BLUE.length - 1, Math.floor((h / maxMH) * (SEQ_BLUE.length - 1)));
+        const bg = h === 0 ? 'transparent' : SEQ_BLUE[level];
+        const ink = level >= 3 ? '#fff' : '#0b0b0b';
+        return `<td class="heat-cell" style="background:${bg};color:${h === 0 ? 'var(--text3)' : ink}" title="${esc(p.name)} – ${MONTHS[m]}: ${fmtH(h)} Stunden">${h ? Math.round(h) : '·'}</td>`;
+      }).join('');
+      return `<tr><td class="plan-name-col"><span class="person-dot" style="background:${p.color}"></span>${esc(p.name)}</td>${cells}</tr>`;
+    }).join('');
+    monthHeat = `
+    <div class="card">
+      <h3 class="card-title">Arbeitsstunden pro Monat</h3>
+      <p class="muted" style="margin-bottom:10px">Stunden je Person und Monat im Jahr ${year} (dunkler = mehr).</p>
+      <div class="plan-scroll">
+        <table class="stats-table heat-table">
+          <thead><tr><th class="plan-name-col">Person</th>${MONTHS.map(m => `<th>${m.slice(0, 3)}</th>`).join('')}</tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }
+
   el.innerHTML = `
     <div class="page-head">
       <div>
@@ -148,6 +243,8 @@ function renderStatsPage(el) {
         <button class="btn" id="st-next">›</button>
       </div>
     </div>
+
+    ${emptyHint}
 
     <div class="card">
       <h3 class="card-title">Übersicht pro Person</h3>
@@ -179,7 +276,34 @@ function renderStatsPage(el) {
         <p class="muted" style="margin-bottom:10px">Anzahl der Schichten pro Person und Schichtart.</p>
         ${bars || '<p class="muted">Keine Schichten im Zeitraum.</p>'}
       </div>
-    </div>`;
+    </div>
+
+    <div class="stats-2col">
+      <div class="card">
+        <h3 class="card-title">Soll-/Ist-Stunden</h3>
+        <p class="muted" style="margin-bottom:10px">Geleistete Stunden im Vergleich zum Soll (Wochenstunden der Person). Der Strich markiert 100&nbsp;%.</p>
+        ${sollIstRows}
+      </div>
+
+      <div class="card">
+        <h3 class="card-title">Besetzung nach Wochentag</h3>
+        <p class="muted" style="margin-bottom:10px">Wie viele Personen sind durchschnittlich im Dienst? Zeigt Engpässe auf einen Blick.</p>
+        ${staffingRows}
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="card-title">Urlaub &amp; Krank</h3>
+      <p class="muted" style="margin-bottom:10px">Urlaubs- und Kranktage laut Arbeitsplan${mode === 'monat' ? ` (Resturlaub bezieht sich auf das ganze Jahr ${year})` : ''}.</p>
+      <div class="plan-scroll">
+        <table class="stats-table">
+          <thead><tr><th class="plan-name-col">Person</th><th>Urlaub im Zeitraum</th><th>Krank</th><th>Anspruch/Jahr</th><th>Resturlaub</th></tr></thead>
+          <tbody>${urlaubRows}</tbody>
+        </table>
+      </div>
+    </div>
+
+    ${monthHeat}`;
 
   el.querySelector('#st-monat').onclick = () => { statsView.mode = 'monat'; renderStatsPage(el); };
   el.querySelector('#st-jahr').onclick = () => { statsView.mode = 'jahr'; renderStatsPage(el); };
@@ -190,6 +314,18 @@ function renderStatsPage(el) {
     statsView.month = new Date().getMonth();
     renderStatsPage(el);
   };
+}
+
+/* Urlaubstage (U) einer Person im ganzen Jahr laut Arbeitsplan */
+function planVacationDaysInYear(personId, year) {
+  let n = 0;
+  const prefix = year + '-';
+  for (const iso of Object.keys(state.schedule)) {
+    if (!iso.startsWith(prefix)) continue;
+    const s = shiftById(state.schedule[iso][personId]);
+    if (s && s.kind === 'urlaub') n++;
+  }
+  return n;
 }
 
 function shiftStatsPeriod(n) {
