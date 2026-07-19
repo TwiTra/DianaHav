@@ -75,6 +75,15 @@ function renderStatsPage(el) {
   const absShifts = state.shiftTypes.filter(s => s.kind !== 'arbeit');
   const periodLabel = mode === 'jahr' ? String(year) : MONTHS[month] + ' ' + year;
 
+  // Hinweis, wenn im gewählten Zeitraum gar nichts eingetragen ist
+  const hasData = persons.some(p => Object.keys(per[p.id].shiftCounts).length > 0);
+  const emptyHint = hasData ? '' : `
+    <div class="card stats-empty-hint">
+      ⚠️ Im Zeitraum <b>${periodLabel}</b> sind keine Schichten eingetragen.
+      Wechsle mit den Pfeilen <b>‹ ›</b> oben rechts zu dem Monat, den du geplant hast –
+      oder stelle auf <b>„Jahr"</b> um, um das ganze Jahr ${year} auszuwerten.
+    </div>`;
+
   /* --- 1. Übersichtstabelle: alle Personen vergleichbar --- */
   let tableHead = '<tr><th class="plan-name-col">Person</th>' +
     workShifts.map(s => `<th title="${esc(s.label)}"><span class="shift-chip" style="--c:${s.color}">${esc(s.code)}</span></th>`).join('') +
@@ -148,6 +157,8 @@ function renderStatsPage(el) {
         <button class="btn" id="st-next">›</button>
       </div>
     </div>
+
+    ${emptyHint}
 
     <div class="card">
       <h3 class="card-title">Übersicht pro Person</h3>

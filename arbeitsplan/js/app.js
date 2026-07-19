@@ -10,7 +10,13 @@ const PAGES = {
   kalender:      { title: 'Monatskalender', render: (el) => renderCalendarPage(el) },
   plan:          { title: 'Arbeitspläne',   render: (el) => renderPlanPage(el) },
   urlaub:        { title: 'Urlaubspläne',   render: (el) => renderVacationPage(el) },
-  statistik:     { title: 'Statistik',      render: (el) => renderStatsPage(el) },
+  statistik:     { title: 'Statistik',      render: (el) => {
+    // Beim Öffnen den Monat aus dem Arbeitsplan übernehmen –
+    // so wird immer der Monat ausgewertet, den man gerade plant
+    statsView.year = planView.year;
+    statsView.month = planView.month;
+    renderStatsPage(el);
+  } },
   personen:      { title: 'Personen',       render: (el) => renderPersonsPage(el) },
   schichten:     { title: 'Schichtarten',   render: (el) => renderShiftsPage(el) },
   einstellungen: { title: 'Einstellungen',  render: (el) => renderSettingsPage(el) },

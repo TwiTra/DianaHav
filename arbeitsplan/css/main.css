@@ -574,6 +574,11 @@ thead .plan-ft{background:color-mix(in srgb, #e34948 18%, var(--surface2))}
 .vac-days{color:var(--text2);white-space:nowrap}
 
 /* ============ STATISTIK ============ */
+.stats-empty-hint{
+  background:color-mix(in srgb, var(--warn) 10%, var(--surface));
+  border-color:color-mix(in srgb, var(--warn) 45%, transparent);
+  font-size:.9rem;line-height:1.6;
+}
 .stats-2col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media (max-width:1100px){.stats-2col{grid-template-columns:1fr}}
 .stats-table{border-collapse:collapse;width:100%;font-size:.82rem}
