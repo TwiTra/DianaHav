@@ -351,6 +351,14 @@ function renderSettingsPage(el) {
         <button class="btn btn-primary" id="set-share-publish">🌐 ${state.settings.shareGistId ? 'Jetzt aktualisieren' : 'Freigabe-Link erstellen'}</button>
         ${state.settings.shareGistId ? '<button class="btn btn-danger-ghost" id="set-share-off">Freigabe beenden</button>' : ''}
       </div>
+      ${!state.settings.shareGistId ? `
+      <div class="form-row" style="margin-top:12px"><label>Oder: mit bestehender Freigabe verbinden (z. B. von deinem Windows-Programm)</label>
+        <div class="btn-row">
+          <input type="text" id="set-share-connect" placeholder="Mitarbeiter-Link oder Freigabe-ID hier einfügen…" style="flex:1;min-width:220px">
+          <button class="btn" id="set-share-connect-btn">🔗 Verbinden</button>
+        </div>
+        <p class="muted" style="margin-top:6px">Danach gleicht sich dieses Gerät automatisch mit dem neuesten gespeicherten Stand ab (beim Öffnen und beim Fensterwechsel).</p>
+      </div>` : ''}
       ${state.settings.shareGistId ? `
       <div class="form-row" style="margin-top:12px"><label>Link für deine Mitarbeiter</label>
         <div class="btn-row">
@@ -402,6 +410,19 @@ function renderSettingsPage(el) {
     state.settings.shareToken = el.querySelector('#set-share-token').value.trim();
     saveState();
     if (await sharePublish(false)) renderSettingsPage(el);
+  };
+  const shareConnect = el.querySelector('#set-share-connect-btn');
+  if (shareConnect) shareConnect.onclick = async () => {
+    const id = parseShareId(el.querySelector('#set-share-connect').value);
+    if (!id) { toast('Bitte einen gültigen Mitarbeiter-Link oder eine Freigabe-ID einfügen', 'error'); return; }
+    state.settings.shareToken = el.querySelector('#set-share-token').value.trim();
+    state.settings.shareGistId = id;
+    state.settings.syncStand = '';
+    saveState();
+    clearSyncDirty(); // frisch verbunden: den Online-Stand ohne Nachfrage übernehmen
+    toast('🔗 Verbunden – hole den neuesten Stand…', 'success');
+    await ownerSyncCheck();
+    renderSettingsPage(el);
   };
   const shareOff = el.querySelector('#set-share-off');
   if (shareOff) shareOff.onclick = () => {
@@ -556,7 +577,7 @@ function shareViewerLink() {
 }
 
 /* Zu veröffentlichende Daten – ohne Token und ohne lokale Pfade */
-function sharePayload() {
+function sharePayload(stand) {
   return JSON.stringify({
     settings: {
       firma: state.settings.firma,
@@ -571,7 +592,7 @@ function sharePayload() {
     planNotes: state.planNotes,
     calendar: state.calendar,
     vacations: state.vacations,
-    veroeffentlicht: new Date().toISOString(),
+    veroeffentlicht: stand,
   });
 }
 
@@ -589,9 +610,10 @@ async function sharePublish(silent) {
     if (!silent) toast('Bitte zuerst in den Einstellungen ein GitHub-Token hinterlegen', 'warn');
     return false;
   }
+  const stand = new Date().toISOString();
   const body = {
     description: 'Arbeitsplaner – Freigabe für Mitarbeiter (nur Lesen)',
-    files: { [SHARE_FILENAME]: { content: sharePayload() } },
+    files: { [SHARE_FILENAME]: { content: sharePayload(stand) } },
   };
   try {
     let res;
@@ -613,13 +635,94 @@ async function sharePublish(silent) {
     if (!res.ok) throw new Error('GitHub antwortete mit Status ' + res.status);
     const data = await res.json();
     state.settings.shareGistId = data.id;
+    state.settings.syncStand = stand;
     saveState();
+    clearSyncDirty(); // dieser Stand ist jetzt überall verfügbar
     if (!silent) toast('🌐 Freigabe aktualisiert ✓', 'success');
     return true;
   } catch (e) {
     toast('Online-Freigabe fehlgeschlagen: ' + e.message, 'error');
     return false;
   }
+}
+
+/* ============================================================
+   GERÄTE-ABGLEICH der Chef-Ansicht (EXE ↔ Web-Version)
+   Beim Start und beim Fokussieren wird geprüft, ob auf einem
+   anderen Gerät ein neuerer Stand veröffentlicht wurde.
+   ============================================================ */
+
+function applyRemoteState(data) {
+  window.SYNC_APPLYING = true;
+  const keep = { ...state.settings };
+  const def = DEFAULT_STATE();
+  state = Object.assign(def, {
+    persons: data.persons || [],
+    shiftTypes: (data.shiftTypes && data.shiftTypes.length) ? data.shiftTypes : def.shiftTypes,
+    schedule: data.schedule || {},
+    dayNotes: data.dayNotes || {},
+    planNotes: data.planNotes || {},
+    calendar: data.calendar || [],
+    vacations: data.vacations || [],
+  });
+  state.settings = keep; // Token, Pfade und Design-Einstellungen dieses Geräts behalten
+  if (data.settings) {
+    if (data.settings.firma !== undefined) state.settings.firma = data.settings.firma;
+    if (data.settings.bundesland) state.settings.bundesland = data.settings.bundesland;
+    if (data.settings.planDesign) state.settings.planDesign = data.settings.planDesign;
+  }
+  state.settings.syncStand = data.veroeffentlicht || '';
+  saveState();
+  clearSyncDirty();
+  window.SYNC_APPLYING = false;
+  applyTheme();
+  updateBadges();
+  PAGES[currentPage].render(document.getElementById('page-wrap'));
+}
+
+let ownerSyncBusy = false;
+
+async function ownerSyncCheck() {
+  if (window.VIEW_ONLY || ownerSyncBusy || !state.settings.shareGistId) return;
+  ownerSyncBusy = true;
+  try {
+    const headers = { 'Accept': 'application/vnd.github+json' };
+    if (state.settings.shareToken) headers['Authorization'] = 'Bearer ' + state.settings.shareToken;
+    const res = await fetch('https://api.github.com/gists/' + state.settings.shareGistId, { headers });
+    if (!res.ok) return;
+    const g = await res.json();
+    const f = g.files && g.files[SHARE_FILENAME];
+    if (!f) return;
+    let content = f.content;
+    if (f.truncated) content = await (await fetch(f.raw_url)).text();
+    const data = JSON.parse(content);
+    if (!data.veroeffentlicht || data.veroeffentlicht === state.settings.syncStand) return;
+    const standTxt = new Date(data.veroeffentlicht).toLocaleDateString('de-DE') + ', ' +
+      new Date(data.veroeffentlicht).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr';
+    if (isSyncDirty()) {
+      confirmDialog('Auf einem anderen Gerät wurde ein neuerer Stand gespeichert (' + standTxt + '). ' +
+        'Jetzt übernehmen? Nicht veröffentlichte Änderungen auf diesem Gerät gehen dabei verloren. ' +
+        'Tipp: Mit „Abbrechen" und anschließend 💾 veröffentlichst du stattdessen den Stand dieses Geräts.', () => {
+        applyRemoteState(data);
+        toast('🔄 Stand vom ' + standTxt + ' übernommen ✓', 'success');
+      });
+    } else {
+      applyRemoteState(data);
+      toast('🔄 Automatisch aktualisiert – Stand vom ' + standTxt + ' ✓', 'success');
+    }
+  } catch (e) {
+    // offline oder nicht erreichbar – still bleiben, nächster Versuch kommt
+  } finally {
+    ownerSyncBusy = false;
+  }
+}
+
+/* Freigabe-ID aus einem Mitarbeiter-Link oder einer ID herauslösen */
+function parseShareId(text) {
+  const m = String(text).match(/[?&]ansicht=([A-Za-z0-9]+)/);
+  if (m) return m[1];
+  const plain = String(text).trim();
+  return /^[A-Za-z0-9]{10,}$/.test(plain) ? plain : '';
 }
 
 /* Nach dem Speichern (💾) automatisch veröffentlichen, falls eingerichtet */
@@ -785,5 +888,9 @@ document.addEventListener('DOMContentLoaded', () => {
     initViewer(ansicht).then(() => navigate());
   } else {
     navigate();
+    // Geräte-Abgleich: neuen Stand von anderen Geräten übernehmen
+    ownerSyncCheck();
+    window.addEventListener('focus', () => ownerSyncCheck());
+    setInterval(() => ownerSyncCheck(), 300000); // alle 5 Minuten
   }
 });

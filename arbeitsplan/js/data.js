@@ -30,6 +30,7 @@ const DEFAULT_STATE = () => ({
     shareToken: '',      // GitHub-Token für die Online-Freigabe
     shareGistId: '',     // Gist-ID der veröffentlichten Freigabe
     shareAuto: true,     // beim Speichern (💾) automatisch aktualisieren
+    syncStand: '',       // zuletzt veröffentlichter/übernommener Stand (Geräte-Abgleich)
   },
   persons: [],          // {id, name, color, hoursPerWeek, vacationDays, note, active}
   shiftTypes: JSON.parse(JSON.stringify(DEFAULT_SHIFTS)),
@@ -62,9 +63,19 @@ function saveState() {
   if (window.VIEW_ONLY) return; // Nur-Lese-Ansicht verändert nichts
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    // Merken, dass es lokale Änderungen gibt, die noch nicht
+    // veröffentlicht wurden (für den Geräte-Abgleich)
+    if (!window.SYNC_APPLYING) localStorage.setItem('arbeitsplaner-sync-dirty', '1');
   } catch (e) {
     if (typeof toast === 'function') toast('Speichern fehlgeschlagen – Speicher voll?', 'error');
   }
+}
+
+function isSyncDirty() {
+  try { return localStorage.getItem('arbeitsplaner-sync-dirty') === '1'; } catch (e) { return false; }
+}
+function clearSyncDirty() {
+  try { localStorage.removeItem('arbeitsplaner-sync-dirty'); } catch (e) { /* egal */ }
 }
 
 function uid() {
